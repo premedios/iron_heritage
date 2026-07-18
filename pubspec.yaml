@@ -93,3 +93,27 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+
+# Flavor configuration for flutter_flavorizr.
+# Regenerate native flavor wiring with: dart run flutter_flavorizr
+flavorizr:
+  app:
+    android:
+      flavorDimensions: "flavor"
+
+  flavors:
+    dev:
+      app:
+        name: "Iron Heritage Dev"
+      android:
+        applicationId: "com.pedroremedios.ironheritage.dev"
+      ios:
+        bundleId: "com.pedroremedios.ironheritage.dev"
+
+    prod:
+      app:
+        name: "Iron Heritage"
+      android:
+        applicationId: "com.pedroremedios.ironheritage"
+      ios:
+        bundleId: "com.pedroremedios.ironheritage"
