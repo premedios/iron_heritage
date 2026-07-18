@@ -43,3 +43,21 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Release signing credentials - NEVER commit these.
+# This repository is public; a leaked keystore cannot be revoked, and losing it
+# means you can never ship an update to an app already published under it.
+# Keep the keystore backed up somewhere outside the repo.
+**/key.properties
+**/keystore.properties
+*.jks
+*.keystore
+*.p12
+*.pepk
+
+# iOS signing
+**/ios/Runner/GoogleService-Info.plist
+*.mobileprovision
+*.certSigningRequest
+*.cer
+*.p8
