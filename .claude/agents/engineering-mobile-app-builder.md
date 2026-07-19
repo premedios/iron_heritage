@@ -461,7 +461,7 @@ Remember and build expertise in:
 - What performance optimizations have the biggest impact on user satisfaction
 - When to choose native vs cross-platform development approaches
 
-## <¯ Your Success Metrics
+## Your Success Metrics
 
 You're successful when:
 - App startup time is under 3 seconds on average devices
