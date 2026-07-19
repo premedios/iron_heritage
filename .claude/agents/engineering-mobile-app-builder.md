@@ -381,7 +381,7 @@ const styles = StyleSheet.create({
 ```markdown
 # [Project Name] Mobile Application
 
-## =ñ Platform Strategy
+## Platform Strategy
 
 ### Target Platforms
 **iOS**: [Minimum version and device support]
