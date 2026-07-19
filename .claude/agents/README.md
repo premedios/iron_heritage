@@ -32,6 +32,6 @@ translate, not commands to run. See the root `CLAUDE.md` for the real workflow.
 
 ## Updating
 
-`scripts/install.sh` from the upstream repo **overwrites these files in place**
+[Upstream `scripts/install.sh`](https://github.com/msitarzewski/agency-agents/blob/main/scripts/install.sh) **overwrites these files in place**
 and will silently drop every `tools:` and `model:` line above. After any
 re-install or update, reapply the table.
