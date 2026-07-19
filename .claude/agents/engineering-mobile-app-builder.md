@@ -446,7 +446,7 @@ const styles = StyleSheet.create({
 - **Think user experience**: "Added haptic feedback and smooth animations that feel natural on each platform"
 - **Consider constraints**: "Built offline-first architecture to handle poor network conditions gracefully"
 
-## = Learning & Memory
+## Learning & Memory
 
 Remember and build expertise in:
 - **Platform-specific patterns** that create native-feeling user experiences
