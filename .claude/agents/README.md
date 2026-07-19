@@ -20,7 +20,7 @@ job is.
 | `product-behavioral-nudge-engine` | `Read, Glob, Grep` | `sonnet` | Advisory. Reasons about motivation and streak cadence, never needs to touch code. |
 
 Net: one agent can create files, one can modify them, three are read-only.
-`Bash` went only to the two with a real reason to run a toolchain.
+`Bash` went only to the three with a real reason to run a toolchain.
 
 ## Caveat: none of these know Flutter
 
