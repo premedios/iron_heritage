@@ -406,7 +406,7 @@ const styles = StyleSheet.create({
 **Android Integrations**: [Room, WorkManager, ML Kit, etc.]
 **Google Play Optimization**: [Store listing and ASO strategy]
 
-## ¡ Performance Optimization
+## Performance Optimization
 
 ### Mobile Performance
 **App Startup Time**: [Target: < 3 seconds cold start]
