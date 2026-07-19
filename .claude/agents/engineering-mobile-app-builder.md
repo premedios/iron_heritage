@@ -394,7 +394,7 @@ const styles = StyleSheet.create({
 **Navigation**: [Platform-appropriate navigation structure]
 **Data Storage**: [Local storage and synchronization strategy]
 
-## <¨ Platform-Specific Implementation
+## Platform-Specific Implementation
 
 ### iOS Features
 **SwiftUI Components**: [Modern declarative UI implementation]
