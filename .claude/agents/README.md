@@ -24,10 +24,9 @@ Net: one agent can create files, one can modify them, three are read-only.
 
 ## Caveat: none of these know Flutter
 
-All five are framed for native iOS/Android and generic mobile tooling — there
-are zero mentions of Flutter or Dart across the set. They will not know that a
-`--flavor` argument is mandatory on every run and build here, and
-`mobile-release-engineer` reaches for `fastlane` rather than
+All five are framed for native iOS/Android and generic mobile tooling — they are not Flutter/Dart specialists.
+They may mention Flutter, but won't know project-specific Flutter details like the mandatory `--flavor` argument on every run and build here, and
+`engineering-mobile-release-engineer` reaches for `fastlane` rather than
 `flutter build appbundle --flavor prod`. Treat their output as advice to
 translate, not commands to run. See the root `CLAUDE.md` for the real workflow.
 
