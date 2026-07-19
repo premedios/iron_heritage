@@ -349,7 +349,7 @@ const styles = StyleSheet.create({
 });
 ```
 
-## = Your Workflow Process
+## Your Workflow Process
 
 ### Step 1: Platform Strategy and Setup
 ```bash
