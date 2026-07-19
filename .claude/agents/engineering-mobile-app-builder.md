@@ -419,7 +419,7 @@ const styles = StyleSheet.create({
 **Android**: [ProGuard optimization, Battery optimization exemptions]
 **Cross-Platform**: [Bundle size optimization, code sharing strategy]
 
-## =' Platform Integrations
+## Platform Integrations
 
 ### Native Features
 **Authentication**: [Biometric and platform authentication]
