@@ -1,0 +1,72 @@
+[
+  {
+    "name": "Barbell Bench Press",
+    "category": "Chest",
+    "primaryMuscles": ["Pectoralis major"],
+    "secondaryMuscles": ["Anterior deltoid", "Triceps brachii"],
+    "equipment": ["Barbell", "Bench"]
+  },
+  {
+    "name": "Barbell Squat",
+    "category": "Legs",
+    "primaryMuscles": ["Quadriceps", "Gluteus maximus"],
+    "secondaryMuscles": ["Hamstrings", "Adductors", "Erector spinae"],
+    "equipment": ["Barbell", "Squat Rack"]
+  },
+  {
+    "name": "Conventional Deadlift",
+    "category": "Back",
+    "primaryMuscles": ["Erector spinae", "Gluteus maximus", "Hamstrings"],
+    "secondaryMuscles": ["Latissimus dorsi", "Trapezius", "Quadriceps"],
+    "equipment": ["Barbell"]
+  },
+  {
+    "name": "Overhead Press",
+    "category": "Shoulders",
+    "primaryMuscles": ["Anterior deltoid"],
+    "secondaryMuscles": ["Lateral deltoid", "Triceps brachii", "Upper trapezius"],
+    "equipment": ["Barbell"]
+  },
+  {
+    "name": "Pull-up",
+    "category": "Back",
+    "primaryMuscles": ["Latissimus dorsi"],
+    "secondaryMuscles": ["Biceps brachii", "Rhomboids", "Lower trapezius"],
+    "equipment": ["Pull-up Bar"]
+  },
+  {
+    "name": "Barbell Row",
+    "category": "Back",
+    "primaryMuscles": ["Latissimus dorsi", "Rhomboids"],
+    "secondaryMuscles": ["Biceps brachii", "Erector spinae", "Posterior deltoid"],
+    "equipment": ["Barbell"]
+  },
+  {
+    "name": "Dumbbell Lateral Raise",
+    "category": "Shoulders",
+    "primaryMuscles": ["Lateral deltoid"],
+    "secondaryMuscles": ["Anterior deltoid", "Supraspinatus"],
+    "equipment": ["Dumbbell"]
+  },
+  {
+    "name": "Barbell Bicep Curl",
+    "category": "Arms",
+    "primaryMuscles": ["Biceps brachii"],
+    "secondaryMuscles": ["Brachialis", "Brachioradialis"],
+    "equipment": ["Barbell"]
+  },
+  {
+    "name": "Triceps Pushdown",
+    "category": "Arms",
+    "primaryMuscles": ["Triceps brachii"],
+    "secondaryMuscles": [],
+    "equipment": ["Cable"]
+  },
+  {
+    "name": "Leg Press",
+    "category": "Legs",
+    "primaryMuscles": ["Quadriceps"],
+    "secondaryMuscles": ["Gluteus maximus", "Hamstrings"],
+    "equipment": ["Machine"]
+  }
+]
