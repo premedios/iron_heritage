@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/services.dart' show rootBundle;
+import 'package:logger/logger.dart';
 import '../../../core/database/database.dart';
 import '../../../core/database/database_provider.dart';
 import 'package:drift/drift.dart';
@@ -28,6 +29,7 @@ Future<void> runSync(Ref ref) async {
 
 class WgerRepository {
   final AppDatabase _db;
+  final _logger = Logger();
   
   WgerRepository(this._db);
 
@@ -61,8 +63,7 @@ class WgerRepository {
         batch.insertAllOnConflictUpdate(_db.exercises, companions);
       });
     } catch (e) {
-      // ignore: avoid_print
-      print('Failed to sync exercises: $e');
+      _logger.e('Failed to sync exercises: $e');
     }
   }
 }
