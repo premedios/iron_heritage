@@ -2,17 +2,42 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'flavors.dart';
-import 'pages/my_home_page.dart';
 
-class App extends StatelessWidget {
+
+import 'src/core/theme/app_theme.dart';
+import 'src/features/sync/data/wger_repository.dart';
+import 'src/features/sync/presentation/sync_screen.dart';
+import 'src/features/dashboard/presentation/dashboard_screen.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+class App extends ConsumerWidget {
   const App({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isSyncedAsync = ref.watch(isSyncedProvider);
+
     return MaterialApp(
       title: F.title,
-      theme: ThemeData(primarySwatch: Colors.blue),
-      home: _flavorBanner(child: MyHomePage(), show: kDebugMode),
+      theme: AppTheme.darkTheme,
+      home: _flavorBanner(
+        child: isSyncedAsync.when(
+          data: (isSynced) {
+            if (isSynced) {
+              return const DashboardScreen();
+            } else {
+              return const SyncScreen();
+            }
+          },
+          loading: () => const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          ),
+          error: (err, stack) => Scaffold(
+            body: Center(child: Text('Error: $err')),
+          ),
+        ),
+        show: kDebugMode,
+      ),
     );
   }
 
