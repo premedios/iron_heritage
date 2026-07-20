@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/database/database.dart';
 import '../../../core/database/database_provider.dart';
+import 'smart_alternatives_bottom_sheet.dart';
 
 final exercisesProvider = StreamProvider<List<Exercise>>((ref) {
   final db = ref.watch(databaseProvider);
@@ -44,6 +45,39 @@ class ExerciseListScreen extends ConsumerWidget {
                       Text('Primary Muscles: ${ex.primaryMuscles?.join(", ") ?? "None"}'),
                       Text('Secondary: ${ex.secondaryMuscles?.join(", ") ?? "None"}'),
                       Text('Equipment: ${ex.equipment?.join(", ") ?? "None"}'),
+                      const SizedBox(height: 8),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton.icon(
+                          icon: const Icon(Icons.warning_amber_rounded, size: 18),
+                          label: const Text('Occupied? Find Alternatives'),
+                          style: TextButton.styleFrom(
+                            foregroundColor: Colors.orange.shade800,
+                          ),
+                          onPressed: () {
+                            showSmartAlternativesBottomSheet(
+                              context: context,
+                              occupiedExercise: ex,
+                              allExercises: exercises,
+                              onSelectAlternative: (alt) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Swapped ${ex.name} for ${alt.name}'),
+                                  ),
+                                );
+                              },
+                              onSkip: () {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Skipped ${ex.name}'),
+                                    backgroundColor: Colors.red.shade700,
+                                  ),
+                                );
+                              },
+                            );
+                          },
+                        ),
+                      ),
                     ],
                   ),
                 ),
