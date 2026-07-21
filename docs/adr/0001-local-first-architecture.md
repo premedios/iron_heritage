@@ -13,7 +13,7 @@ Iron Heritage is a workout tracking app. Gyms often have poor internet connectiv
 ## Decision
 
 We will use a **Local-First Architecture**.
-- **State Management**: Riverpod (using the `riverpod_generator` for code generation).
+- **State Management**: Riverpod with manual providers. Generated-provider guidance is superseded by ADR-0003.
 - **Persistence**: Drift (SQLite) for robust, relational, type-safe local data storage.
 - **Sync/Backup**: We will not use a centralized backend. Instead, we will rely on first-party native cloud sync (Apple iCloud for iOS, and Google Drive / Android Auto Backup for Android) to backup the local Drift database.
 

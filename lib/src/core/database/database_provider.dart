@@ -1,9 +1,9 @@
-import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import 'database.dart';
 
-part 'database_provider.g.dart';
-
-@Riverpod(keepAlive: true)
-AppDatabase database(Ref ref) {
-  return AppDatabase();
-}
+final databaseProvider = Provider<AppDatabase>((ref) {
+  final database = AppDatabase();
+  ref.onDispose(database.close);
+  return database;
+});

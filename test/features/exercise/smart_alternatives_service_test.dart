@@ -66,31 +66,51 @@ void main() {
       ),
     ];
 
-    test('filters out occupied exercise itself and mismatched mechanic/movementPattern', () {
-      final results = service.findAlternatives(
-        occupiedExercise: occupiedBenchPress,
-        allExercises: dbExercises,
-      );
+    test(
+      'filters out occupied exercise itself and mismatched mechanic/movementPattern',
+      () {
+        final results = service.findAlternatives(
+          occupiedExercise: occupiedBenchPress,
+          allExercises: dbExercises,
+        );
 
-      // Should contain Dumbbell Bench Press, Smith Machine Bench Press, Push-up
-      // Should NOT contain occupied exercise (Barbell Bench Press) or mismatched Fly (Cable Crossover)
-      final names = results.map((e) => e.name).toList();
-      expect(names, isNot(contains('Barbell Bench Press')));
-      expect(names, isNot(contains('Cable Crossover')));
-      expect(names, containsAll(['Smith Machine Bench Press', 'Dumbbell Bench Press', 'Push-up']));
-    });
+        // Should contain Dumbbell Bench Press, Smith Machine Bench Press, Push-up
+        // Should NOT contain occupied exercise (Barbell Bench Press) or mismatched Fly (Cable Crossover)
+        final names = results.map((e) => e.name).toList();
+        expect(names, isNot(contains('Barbell Bench Press')));
+        expect(names, isNot(contains('Cable Crossover')));
+        expect(
+          names,
+          containsAll([
+            'Smith Machine Bench Press',
+            'Dumbbell Bench Press',
+            'Push-up',
+          ]),
+        );
+      },
+    );
 
-    test('sorts according to equipment priority starting from occupied exercise equipment', () {
-      final results = service.findAlternatives(
-        occupiedExercise: occupiedBenchPress, // Equipment: Barbell
-        allExercises: dbExercises,
-      );
+    test(
+      'sorts according to equipment priority starting from occupied exercise equipment',
+      () {
+        final results = service.findAlternatives(
+          occupiedExercise: occupiedBenchPress, // Equipment: Barbell
+          allExercises: dbExercises,
+        );
 
-      // Barbell occupied: Priority chain wraps starting at Barbell -> Smith Machine -> Cable -> Machine -> Dumbbell -> Bodyweight
-      // Candidates: Smith Machine Bench Press (Smith Machine), Dumbbell Bench Press (Dumbbell), Push-up (Bodyweight)
-      final names = results.map((e) => e.name).toList();
-      expect(names, equals(['Smith Machine Bench Press', 'Dumbbell Bench Press', 'Push-up']));
-    });
+        // Barbell occupied: Priority chain wraps starting at Barbell -> Smith Machine -> Cable -> Machine -> Dumbbell -> Bodyweight
+        // Candidates: Smith Machine Bench Press (Smith Machine), Dumbbell Bench Press (Dumbbell), Push-up (Bodyweight)
+        final names = results.map((e) => e.name).toList();
+        expect(
+          names,
+          equals([
+            'Smith Machine Bench Press',
+            'Dumbbell Bench Press',
+            'Push-up',
+          ]),
+        );
+      },
+    );
 
     test('wraps around equipment priority when starting from Cable', () {
       const occupiedCableFly = Exercise(
@@ -156,12 +176,72 @@ void main() {
       // Core chain: Barbell (0), Smith Machine (1), Cable (2), Machine (3), Dumbbell (4).
       // Wrap starting at Cable (2): Cable (2), Machine (3), Dumbbell (4), Barbell (0), Smith Machine (1), Bodyweight (end).
       final names = results.map((e) => e.name).toList();
-      expect(names, equals([
-        'Pec Deck', // Machine
-        'Dumbbell Fly', // Dumbbell
-        'Barbell Fly Prototype', // Barbell
-        'Bodyweight Fly Prototype', // Bodyweight (last resort)
-      ]));
+      expect(
+        names,
+        equals([
+          'Pec Deck', // Machine
+          'Dumbbell Fly', // Dumbbell
+          'Barbell Fly Prototype', // Barbell
+          'Bodyweight Fly Prototype', // Bodyweight (last resort)
+        ]),
+      );
+    });
+
+    test('requires the complete occupied primary-muscle set', () {
+      const occupied = Exercise(
+        id: 20,
+        name: 'Compound Chest Press',
+        primaryMuscles: ['Pectoralis major', 'Triceps brachii'],
+        equipment: ['Barbell'],
+        mechanic: 'Compound',
+        force: 'Push',
+        movementPattern: 'Press',
+      );
+      const partialMatch = Exercise(
+        id: 21,
+        name: 'Partial Chest Press',
+        primaryMuscles: ['Pectoralis major'],
+        equipment: ['Machine'],
+        mechanic: 'Compound',
+        force: 'Push',
+        movementPattern: 'Press',
+      );
+
+      final results = service.findAlternatives(
+        occupiedExercise: occupied,
+        allExercises: const [partialMatch],
+      );
+
+      expect(results, isEmpty);
+    });
+
+    test('deduplicates alternatives by normalized exercise name', () {
+      const first = Exercise(
+        id: 30,
+        name: 'Machine Chest Press',
+        primaryMuscles: ['Pectoralis major'],
+        equipment: ['Machine'],
+        mechanic: 'Compound',
+        force: 'Push',
+        movementPattern: 'Press',
+      );
+      const duplicate = Exercise(
+        id: 31,
+        name: '  machine chest press  ',
+        primaryMuscles: ['Pectoralis major'],
+        equipment: ['Machine'],
+        mechanic: 'Compound',
+        force: 'Push',
+        movementPattern: 'Press',
+      );
+
+      final results = service.findAlternatives(
+        occupiedExercise: occupiedBenchPress,
+        allExercises: const [first, duplicate],
+      );
+
+      expect(results, hasLength(1));
+      expect(results.single.id, 30);
     });
   });
 }

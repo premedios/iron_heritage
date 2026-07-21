@@ -128,7 +128,8 @@ abstract class MyModel with _$MyModel {
 
 ### Issue tracker
 
-Issues are tracked in GitHub Issues. See `docs/agents/issue-tracker.md`.
+Issues are tracked in YouTrack project `IH` at
+`http://192.168.1.67:8880`. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 

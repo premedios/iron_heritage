@@ -1,36 +1,31 @@
 import 'dart:convert';
 import 'package:flutter/services.dart' show rootBundle;
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:logger/logger.dart';
 import '../../../core/database/database.dart';
 import '../../../core/database/database_provider.dart';
 import 'package:drift/drift.dart';
-import 'package:riverpod_annotation/riverpod_annotation.dart';
 
-part 'wger_repository.g.dart';
-
-@riverpod
-WgerRepository wgerRepository(Ref ref) {
+final wgerRepositoryProvider = Provider<WgerRepository>((ref) {
   return WgerRepository(ref.watch(databaseProvider));
-}
+});
 
-@riverpod
-Future<bool> isSynced(Ref ref) async {
+final isSyncedProvider = FutureProvider<bool>((ref) async {
   final repo = ref.watch(wgerRepositoryProvider);
-  return await repo.isSynced();
-}
+  return repo.isSynced();
+});
 
-@riverpod
-Future<void> runSync(Ref ref) async {
+final runSyncProvider = FutureProvider<void>((ref) async {
   final repo = ref.watch(wgerRepositoryProvider);
   await repo.syncExercises();
   // Invalidate so the app routing knows we are synced now!
   ref.invalidate(isSyncedProvider);
-}
+});
 
 class WgerRepository {
   final AppDatabase _db;
   final _logger = Logger();
-  
+
   WgerRepository(this._db);
 
   Future<bool> isSynced() async {
@@ -43,7 +38,9 @@ class WgerRepository {
   /// Loads pre-loaded exercises from the local JSON asset and saves them to the local database.
   Future<void> syncExercises() async {
     try {
-      final jsonString = await rootBundle.loadString('assets/seed_exercises.json');
+      final jsonString = await rootBundle.loadString(
+        'assets/seed_exercises.json',
+      );
       final List<dynamic> results = json.decode(jsonString);
 
       final companions = results.map((e) {
@@ -51,7 +48,9 @@ class WgerRepository {
           name: e['name'] as String,
           category: Value(e['category'] as String?),
           primaryMuscles: Value(List<String>.from(e['primaryMuscles'] ?? [])),
-          secondaryMuscles: Value(List<String>.from(e['secondaryMuscles'] ?? [])),
+          secondaryMuscles: Value(
+            List<String>.from(e['secondaryMuscles'] ?? []),
+          ),
           equipment: Value(List<String>.from(e['equipment'] ?? [])),
           mechanic: Value(e['mechanic'] as String?),
           force: Value(e['force'] as String?),

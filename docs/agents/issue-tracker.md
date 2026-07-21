@@ -1,45 +1,210 @@
-# Issue tracker: GitHub
+# Issue tracker: YouTrack
 
-Issues and PRDs for this repo live as GitHub issues. Use the `gh` CLI for all operations.
+Issues and PRDs for this repository live in YouTrack project `IH`.
+GitHub remains the code host and pull-request target, but GitHub Issues are not
+used for project work.
 
-## Conventions
+## Configuration
 
-- **Create an issue**: `gh issue create --title "..." --body "..."`. Use a heredoc for multi-line bodies.
-- **Read an issue**: `gh issue view <number> --comments`, filtering comments by `jq` and also fetching labels.
-- **List issues**: `gh issue list --state open --json number,title,body,labels,comments --jq '[.[] | {number, title, body, labels: [.labels[].name], comments: [.comments[].body]}]'` with appropriate `--label` and `--state` filters.
-- **Comment on an issue**: `gh issue comment <number> --body "..."`
-- **Apply / remove labels**: `gh issue edit <number> --add-label "..."` / `--remove-label "..."`
-- **Close**: `gh issue close <number> --comment "..."`
+- Base URL: `http://192.168.1.67:8880`
+- Project short name: `IH`
+- Transport: YouTrack REST API; no YouTrack CLI is required.
+- Authentication: permanent token from the `YOUTRACK_TOKEN` environment
+  variable.
 
-Infer the repo from `git remote -v` — `gh` does this automatically when run inside a clone.
+Never store, print, log, or commit the permanent token. Stop and ask the user to
+set `YOUTRACK_TOKEN` when it is missing.
 
-## Pull requests as a triage surface
+Initialize each PowerShell session before using the examples below:
 
-**PRs as a request surface: no.** _(Set to `yes` if this repo treats external PRs as feature requests; `/triage` reads this flag.)_
+~~~powershell
+$ytBaseUrl = 'http://192.168.1.67:8880'
+$ytProjectShortName = 'IH'
 
-When set to `yes`, PRs run through the same labels and states as issues, using the `gh pr` equivalents:
+if ([string]::IsNullOrWhiteSpace($env:YOUTRACK_TOKEN)) {
+  throw 'Set YOUTRACK_TOKEN before accessing YouTrack.'
+}
 
-- **Read a PR**: `gh pr view <number> --comments` and `gh pr diff <number>` for the diff.
-- **List external PRs for triage**: `gh pr list --state open --json number,title,body,labels,author,authorAssociation,comments` then keep only `authorAssociation` of `CONTRIBUTOR`, `FIRST_TIME_CONTRIBUTOR`, or `NONE` (drop `OWNER`/`MEMBER`/`COLLABORATOR`).
-- **Comment / label / close**: `gh pr comment`, `gh pr edit --add-label`/`--remove-label`, `gh pr close`.
+$ytHeaders = @{
+  Authorization = "Bearer $env:YOUTRACK_TOKEN"
+  Accept = 'application/json'
+  'Content-Type' = 'application/json'
+}
 
-GitHub shares one number space across issues and PRs, so a bare `#42` may be either — resolve with `gh pr view 42` and fall back to `gh issue view 42`.
+$projectQuery = [Uri]::EscapeDataString($ytProjectShortName)
+$projects = @(
+  Invoke-RestMethod `
+    -Uri "$ytBaseUrl/api/admin/projects?fields=id,name,shortName&query=$projectQuery" `
+    -Headers $ytHeaders
+)
+$ytProject = $projects |
+  Where-Object { $_.shortName -eq $ytProjectShortName } |
+  Select-Object -First 1
 
-## When a skill says "publish to the issue tracker"
+if ($null -eq $ytProject) {
+  throw "YouTrack project $ytProjectShortName was not found."
+}
+~~~
 
-Create a GitHub issue.
+## Issue implementation workflow
 
-## When a skill says "fetch the relevant ticket"
+This policy applies to future issues; existing in-progress work does not need to
+move branches.
 
-Run `gh issue view <number> --comments`.
+- Implement each issue on its own dedicated branch created from the latest
+  `main`.
+- Keep one issue per branch. Do not reuse that branch for another issue.
+- Commit the completed issue to its branch and open a pull request targeting
+  `main` before starting the next issue.
+
+## Core operations
+
+### Create an issue
+
+~~~powershell
+$payload = @{
+  project = @{ id = $ytProject.id }
+  summary = '<summary>'
+  description = '<markdown description>'
+} | ConvertTo-Json -Depth 5
+
+Invoke-RestMethod `
+  -Method Post `
+  -Uri "$ytBaseUrl/api/issues?fields=id,idReadable,summary" `
+  -Headers $ytHeaders `
+  -Body $payload
+~~~
+
+### Read an issue and its comments
+
+~~~powershell
+$issueId = 'IH-1'
+$issueFields = 'id,idReadable,summary,description,resolved,tags(id,name),customFields(name,value(name,login))'
+$issue = Invoke-RestMethod `
+  -Uri "$ytBaseUrl/api/issues/$issueId?fields=$issueFields" `
+  -Headers $ytHeaders
+
+$comments = Invoke-RestMethod `
+  -Uri "$ytBaseUrl/api/issues/$issueId/comments?fields=id,text,created,author(login,name)&%24top=100" `
+  -Headers $ytHeaders
+~~~
+
+### List or search issues
+
+Use YouTrack search syntax and URL-encode the query:
+
+~~~powershell
+$query = [Uri]::EscapeDataString('project: IH #Unresolved')
+$fields = 'id,idReadable,summary,description,resolved,tags(id,name),customFields(name,value(name,login))'
+
+Invoke-RestMethod `
+  -Uri "$ytBaseUrl/api/issues?fields=$fields&query=$query&%24top=100" `
+  -Headers $ytHeaders
+~~~
+
+### Comment on an issue
+
+~~~powershell
+$payload = @{ text = '<comment>' } | ConvertTo-Json
+
+Invoke-RestMethod `
+  -Method Post `
+  -Uri "$ytBaseUrl/api/issues/$issueId/comments?fields=id,text" `
+  -Headers $ytHeaders `
+  -Body $payload
+~~~
+
+### Apply or remove a triage tag
+
+The tags in `docs/agents/triage-labels.md` must already exist in YouTrack and
+be shared with the project team.
+
+~~~powershell
+$tagName = 'ready-for-agent'
+$tagQuery = [Uri]::EscapeDataString($tagName)
+$tags = @(
+  Invoke-RestMethod `
+    -Uri "$ytBaseUrl/api/tags?fields=id,name&query=$tagQuery" `
+    -Headers $ytHeaders
+)
+$tag = $tags | Where-Object { $_.name -eq $tagName } | Select-Object -First 1
+
+if ($null -eq $tag) {
+  throw "YouTrack tag $tagName was not found or is not shared."
+}
+
+$payload = @{ id = $tag.id } | ConvertTo-Json
+Invoke-RestMethod `
+  -Method Post `
+  -Uri "$ytBaseUrl/api/issues/$issueId/tags?fields=id,name" `
+  -Headers $ytHeaders `
+  -Body $payload
+
+# Remove the tag when required:
+Invoke-RestMethod `
+  -Method Delete `
+  -Uri "$ytBaseUrl/api/issues/$issueId/tags/$($tag.id)" `
+  -Headers $ytHeaders
+~~~
+
+### Apply commands, claim, link, or resolve
+
+YouTrack commands handle state changes, assignment, and issue links:
+
+~~~powershell
+$payload = @{
+  query = 'for me'
+  issues = @(@{ idReadable = $issueId })
+} | ConvertTo-Json -Depth 5
+
+Invoke-RestMethod `
+  -Method Post `
+  -Uri "$ytBaseUrl/api/commands" `
+  -Headers $ytHeaders `
+  -Body $payload
+~~~
+
+Change `query` as needed:
+
+- Claim: `for me`
+- Blocked by another issue: `depends on IH-2`
+- Child of a map issue: `subtask of IH-1`
+- Resolve: `Fixed`
+
+If project `IH` uses a different resolved-state value, replace `Fixed` with that
+project command. Verify links through
+`GET /api/issues/{issueID}/links?fields=linkType(name,sourceToTarget,targetToSource),issues(id,idReadable,summary,resolved)`.
+
+## Skill semantics
+
+- When a skill says **publish to the issue tracker**, create an issue in
+  YouTrack project `IH`.
+- When a skill says **fetch the relevant ticket**, read the issue, comments,
+  tags, custom fields, and links from YouTrack.
+- When a skill references a bare issue ID, use the human-readable YouTrack ID
+  such as `IH-15`.
+- Do not create, edit, label, comment on, or close GitHub Issues for project
+  work.
 
 ## Wayfinding operations
 
-Used by `/wayfinder`. The **map** is a single issue with **child** issues as tickets.
+- **Map**: one YouTrack issue tagged `wayfinder:map` containing Notes,
+  Decisions-so-far, and Fog.
+- **Child ticket**: a YouTrack issue tagged `wayfinder:<type>`
+  (`research`, `prototype`, `grilling`, or `task`) and linked to the map with
+  `subtask of <map-id>`.
+- **Blocking**: link the child with `depends on <blocker-id>`. A ticket is
+  unblocked only when all linked blockers are resolved.
+- **Frontier query**: search open map children, exclude assigned issues and
+  issues with unresolved `depends on` links, then take the first in map order.
+- **Claim**: apply `for me`. This is the session's first tracker write.
+- **Resolve**: comment with the answer, apply the project's resolved-state
+  command, then add a context pointer to the map's Decisions-so-far.
 
-- **Map**: a single issue labelled `wayfinder:map`, holding the Notes / Decisions-so-far / Fog body. `gh issue create --label wayfinder:map`.
-- **Child ticket**: an issue linked to the map as a GitHub sub-issue (`gh api` on the sub-issues endpoint). Where sub-issues aren't enabled, add the child to a task list in the map body and put `Part of #<map>` at the top of the child body. Labels: `wayfinder:<type>` (`research`/`prototype`/`grilling`/`task`). Once claimed, the ticket is assigned to the driving dev.
-- **Blocking**: GitHub's **native issue dependencies** — the canonical, UI-visible representation. Add an edge with `gh api --method POST repos/<owner>/<repo>/issues/<child>/dependencies/blocked_by -F issue_id=<blocker-db-id>`, where `<blocker-db-id>` is the blocker's numeric **database id** (`gh api repos/<owner>/<repo>/issues/<n> --jq .id`, _not_ the `#number` or `node_id`). GitHub reports `issue_dependencies_summary.blocked_by` (open blockers only — the live gate). Where dependencies aren't available, fall back to a `Blocked by: #<n>, #<n>` line at the top of the child body. A ticket is unblocked when every blocker is closed.
-- **Frontier query**: list the map's open children (`gh issue list --state open`, scoped to the map's sub-issues / task list), drop any with an open blocker (`issue_dependencies_summary.blocked_by > 0`, or an open issue in the `Blocked by` line) or an assignee; first in map order wins.
-- **Claim**: `gh issue edit <n> --add-assignee @me` — the session's first write.
-- **Resolve**: `gh issue comment <n> --body "<answer>"`, then `gh issue close <n>`, then append a context pointer (gist + link) to the map's Decisions-so-far.
+## API references
+
+- https://www.jetbrains.com/help/youtrack/devportal/youtrack-rest-api.html
+- https://www.jetbrains.com/help/youtrack/devportal/api-howto-create-issue.html
+- https://www.jetbrains.com/help/youtrack/devportal/api-usecase-add-remove-tags.html
+- https://www.jetbrains.com/help/youtrack/devportal/resource-api-commands.html
+- https://www.jetbrains.com/help/youtrack/devportal/api-howto-link-issues.html

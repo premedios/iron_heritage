@@ -1,13 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../core/database/database.dart';
-import '../../../core/database/database_provider.dart';
+import '../data/exercise_repository.dart';
 import 'smart_alternatives_bottom_sheet.dart';
-
-final exercisesProvider = StreamProvider<List<Exercise>>((ref) {
-  final db = ref.watch(databaseProvider);
-  return db.select(db.exercises).watch();
-});
 
 class ExerciseListScreen extends ConsumerWidget {
   const ExerciseListScreen({super.key});
@@ -17,9 +11,7 @@ class ExerciseListScreen extends ConsumerWidget {
     final exercisesAsync = ref.watch(exercisesProvider);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Exercises'),
-      ),
+      appBar: AppBar(title: const Text('Exercises')),
       body: exercisesAsync.when(
         data: (exercises) {
           if (exercises.isEmpty) {
@@ -42,14 +34,21 @@ class ExerciseListScreen extends ConsumerWidget {
                       ),
                       const SizedBox(height: 4),
                       Text('Category: ${ex.category ?? "N/A"}'),
-                      Text('Primary Muscles: ${ex.primaryMuscles?.join(", ") ?? "None"}'),
-                      Text('Secondary: ${ex.secondaryMuscles?.join(", ") ?? "None"}'),
+                      Text(
+                        'Primary Muscles: ${ex.primaryMuscles?.join(", ") ?? "None"}',
+                      ),
+                      Text(
+                        'Secondary: ${ex.secondaryMuscles?.join(", ") ?? "None"}',
+                      ),
                       Text('Equipment: ${ex.equipment?.join(", ") ?? "None"}'),
                       const SizedBox(height: 8),
                       Align(
                         alignment: Alignment.centerRight,
                         child: TextButton.icon(
-                          icon: const Icon(Icons.warning_amber_rounded, size: 18),
+                          icon: const Icon(
+                            Icons.warning_amber_rounded,
+                            size: 18,
+                          ),
                           label: const Text('Occupied? Find Alternatives'),
                           style: TextButton.styleFrom(
                             foregroundColor: Colors.orange.shade800,
@@ -62,7 +61,9 @@ class ExerciseListScreen extends ConsumerWidget {
                               onSelectAlternative: (alt) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
-                                    content: Text('Swapped ${ex.name} for ${alt.name}'),
+                                    content: Text(
+                                      'Swapped ${ex.name} for ${alt.name}',
+                                    ),
                                   ),
                                 );
                               },

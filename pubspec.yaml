@@ -37,7 +37,6 @@ dependencies:
   freezed_annotation: ^3.1.0
   json_annotation: ^4.12.0
   flutter_riverpod: ^3.3.2
-  riverpod_annotation: ^4.0.3
   google_fonts: ^8.2.0
   drift: ^2.34.2
   drift_flutter: ^0.3.1
@@ -57,10 +56,9 @@ dev_dependencies:
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
   build_runner: ^2.15.1
-  freezed:
-  json_serializable:
+  freezed: 3.2.5
+  json_serializable: ^6.14.0
   flutter_flavorizr: ^2.6.0
-  riverpod_generator: ^4.0.4
   drift_dev: ^2.34.0
 
 # For information on the generic Dart part of this file, see the

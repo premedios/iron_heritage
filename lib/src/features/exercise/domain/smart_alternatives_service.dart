@@ -1,12 +1,10 @@
-import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../../../core/database/database.dart';
 
-part 'smart_alternatives_service.g.dart';
-
-@riverpod
-SmartAlternativesService smartAlternativesService(Ref ref) {
-  return const SmartAlternativesService();
-}
+final smartAlternativesServiceProvider = Provider<SmartAlternativesService>(
+  (ref) => const SmartAlternativesService(),
+);
 
 class SmartAlternativesService {
   const SmartAlternativesService();
@@ -26,26 +24,30 @@ class SmartAlternativesService {
     required Exercise occupiedExercise,
     required List<Exercise> allExercises,
   }) {
+    final occupiedMuscles = _normalizedSet(occupiedExercise.primaryMuscles);
+    if (occupiedMuscles.isEmpty) return const [];
+
     // 1. Filter out the occupied exercise itself
     final candidates = allExercises.where((ex) {
-      if (ex.id == occupiedExercise.id || ex.name == occupiedExercise.name) {
+      if (ex.id == occupiedExercise.id ||
+          _normalize(ex.name) == _normalize(occupiedExercise.name)) {
         return false;
       }
 
       // 2. Strict Biomechanical Matching
-      // Must match primary muscles
-      final occupiedMuscles = occupiedExercise.primaryMuscles ?? [];
-      final candidateMuscles = ex.primaryMuscles ?? [];
-      final hasPrimaryMuscleMatch = candidateMuscles.any((m) => occupiedMuscles.contains(m));
-      if (!hasPrimaryMuscleMatch) return false;
+      // Must match the complete primary-muscle set.
+      final candidateMuscles = _normalizedSet(ex.primaryMuscles);
+      if (!_setsEqual(occupiedMuscles, candidateMuscles)) return false;
 
       // Must match mechanic (Compound / Isolation) if specified
-      if (occupiedExercise.mechanic != null && ex.mechanic != occupiedExercise.mechanic) {
+      if (occupiedExercise.mechanic != null &&
+          ex.mechanic != occupiedExercise.mechanic) {
         return false;
       }
 
       // Must match force (Push / Pull / Static) if specified
-      if (occupiedExercise.force != null && ex.force != occupiedExercise.force) {
+      if (occupiedExercise.force != null &&
+          ex.force != occupiedExercise.force) {
         return false;
       }
 
@@ -60,7 +62,7 @@ class SmartAlternativesService {
 
     // 3. Equipment Priority Chain Wrap-Around
     final occupiedEquipment = occupiedExercise.equipment ?? [];
-    
+
     // Find the starting equipment index in core priority
     String startingEquip = occupiedEquipment.firstWhere(
       (e) => coreEquipmentPriority.contains(e),
@@ -85,8 +87,26 @@ class SmartAlternativesService {
       return equipA.compareTo(equipB);
     });
 
-    return candidates;
+    final uniqueCandidates = <String, Exercise>{};
+    for (final candidate in candidates) {
+      uniqueCandidates.putIfAbsent(_normalize(candidate.name), () => candidate);
+    }
+
+    return uniqueCandidates.values.toList();
   }
+
+  Set<String> _normalizedSet(List<String>? values) {
+    return {
+      for (final value in values ?? const <String>[])
+        if (_normalize(value).isNotEmpty) _normalize(value),
+    };
+  }
+
+  bool _setsEqual(Set<String> a, Set<String> b) {
+    return a.length == b.length && a.containsAll(b);
+  }
+
+  String _normalize(String value) => value.trim().toLowerCase();
 
   int _getPriorityIndex(List<String>? equipment, List<String> priorityList) {
     if (equipment == null || equipment.isEmpty) return priorityList.length;
