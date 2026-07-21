@@ -38,10 +38,13 @@ _Avoid_: RPE (Rate of Perceived Exertion)
 An exercise the user cannot perform due to equipment unavailability. Triggers the Smart Alternatives algorithm.
 
 **Smart Alternatives**:
-A local algorithm that queries the database to find replacement exercises matching the exact `primaryMuscles`, `mechanic`, `force`, and `movementPattern` of an Occupied Exercise, sorted by a strict Equipment Priority Chain.
+A local deterministic algorithm that finds replacement exercises using target-muscle coverage plus `mechanic`, `force`, and `movementPattern` relevance. Candidates need target-muscle overlap and a Relevance Score of at least 65, then sort by equipment tier, descending score, and normalized exercise name.
+
+**Relevance Score**:
+A 0–100 Smart Alternatives product heuristic: target-muscle coverage contributes 60 points, matching `mechanic` 15, matching `force` 10, and matching `movementPattern` 15. Candidate primary-muscle matches receive full coverage credit; secondary-muscle matches receive half credit. It is not a scientifically validated equivalence measurement.
 
 **Equipment Priority Chain**:
-The deterministic fallback order for sorting Smart Alternatives: Same Equipment → Barbell → Smith Machine → Cable → Machine → Dumbbell → Bodyweight.
+The first Smart Alternatives sort key. It begins at the Occupied Exercise's recognized core equipment, wraps through Barbell → Smith Machine → Cable → Machine → Dumbbell, and always leaves Bodyweight last.
 
 **Mechanic**:
 Classification of an exercise as either `Compound` (multi-joint) or `Isolation` (single-joint).

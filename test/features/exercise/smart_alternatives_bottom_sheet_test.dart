@@ -27,56 +27,85 @@ void main() {
     movementPattern: 'Press',
   );
 
-  testWidgets('SmartAlternativesBottomSheet renders alternatives and skip button', (tester) async {
-    Exercise? selectedAlt;
-    bool skipped = false;
+  const occupiedBarbellSquat = Exercise(
+    id: 3,
+    name: 'Barbell Squat',
+    category: 'Legs',
+    primaryMuscles: ['Quadriceps', 'Gluteus maximus'],
+    secondaryMuscles: ['Hamstrings', 'Adductors', 'Erector spinae'],
+    equipment: ['Barbell', 'Squat Rack'],
+    mechanic: 'Compound',
+    force: 'Push',
+    movementPattern: 'Squat',
+  );
 
-    await tester.pumpWidget(
-      ProviderScope(
-        child: MaterialApp(
-          home: Scaffold(
-            body: Builder(
-              builder: (context) {
-                return ElevatedButton(
-                  onPressed: () {
-                    showSmartAlternativesBottomSheet(
-                      context: context,
-                      occupiedExercise: occupiedBenchPress,
-                      allExercises: [occupiedBenchPress, dumbbellBenchPress],
-                      onSelectAlternative: (alt) {
-                        selectedAlt = alt;
-                      },
-                      onSkip: () {
-                        skipped = true;
-                      },
-                    );
-                  },
-                  child: const Text('Open'),
-                );
-              },
+  const legPress = Exercise(
+    id: 4,
+    name: 'Leg Press',
+    category: 'Legs',
+    primaryMuscles: ['Quadriceps'],
+    secondaryMuscles: ['Gluteus maximus', 'Hamstrings'],
+    equipment: ['Machine'],
+    mechanic: 'Compound',
+    force: 'Push',
+    movementPattern: 'Press',
+  );
+
+  testWidgets(
+    'SmartAlternativesBottomSheet renders alternatives and skip button',
+    (tester) async {
+      Exercise? selectedAlt;
+      bool skipped = false;
+
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp(
+            home: Scaffold(
+              body: Builder(
+                builder: (context) {
+                  return ElevatedButton(
+                    onPressed: () {
+                      showSmartAlternativesBottomSheet(
+                        context: context,
+                        occupiedExercise: occupiedBenchPress,
+                        allExercises: [occupiedBenchPress, dumbbellBenchPress],
+                        onSelectAlternative: (alt) {
+                          selectedAlt = alt;
+                        },
+                        onSkip: () {
+                          skipped = true;
+                        },
+                      );
+                    },
+                    child: const Text('Open'),
+                  );
+                },
+              ),
             ),
           ),
         ),
-      ),
-    );
+      );
 
-    await tester.tap(find.text('Open'));
-    await tester.pumpAndSettle();
+      await tester.tap(find.text('Open'));
+      await tester.pumpAndSettle();
 
-    // Verify title and alternative items
-    expect(find.text('Smart Alternatives'), findsOneWidget);
-    expect(find.text('Dumbbell Bench Press'), findsOneWidget);
-    expect(find.text('Skip Exercise'), findsOneWidget);
+      // Verify title and alternative items
+      expect(find.text('Smart Alternatives'), findsOneWidget);
+      expect(find.text('Dumbbell Bench Press'), findsOneWidget);
+      expect(find.text('Skip Exercise'), findsOneWidget);
 
-    // Tap alternative
-    await tester.tap(find.text('Select'));
-    await tester.pumpAndSettle();
+      // Tap alternative
+      await tester.tap(find.text('Select'));
+      await tester.pumpAndSettle();
 
-    expect(selectedAlt?.name, equals('Dumbbell Bench Press'));
-    expect(skipped, isFalse);
-  });
+      expect(selectedAlt?.name, equals('Dumbbell Bench Press'));
+      expect(skipped, isFalse);
+    },
+  );
 
-  testWidgets('SmartAlternativesBottomSheet handles Skip button press', (tester) async {
+  testWidgets('SmartAlternativesBottomSheet handles Skip button press', (
+    tester,
+  ) async {
     bool skipped = false;
 
     await tester.pumpWidget(
@@ -114,5 +143,37 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(skipped, isTrue);
+  });
+
+  testWidgets('Barbell Squat bottom sheet displays Leg Press', (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) {
+                return ElevatedButton(
+                  onPressed: () {
+                    showSmartAlternativesBottomSheet(
+                      context: context,
+                      occupiedExercise: occupiedBarbellSquat,
+                      allExercises: [occupiedBarbellSquat, legPress],
+                      onSelectAlternative: (_) {},
+                      onSkip: () {},
+                    );
+                  },
+                  child: const Text('Open'),
+                );
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Open'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Leg Press'), findsOneWidget);
   });
 }
