@@ -2,6 +2,17 @@
 
 Issues and PRDs for this repo live as GitHub issues. Use the `gh` CLI for all operations.
 
+## Issue implementation workflow
+
+This policy applies to future issues; existing in-progress work does not need to
+move branches.
+
+- Implement each issue on its own dedicated branch created from the latest
+  `main`.
+- Keep one issue per branch. Do not reuse that branch for another issue.
+- Commit the completed issue to its branch and open a pull request targeting
+  `main` before starting the next issue.
+
 ## Conventions
 
 - **Create an issue**: `gh issue create --title "..." --body "..."`. Use a heredoc for multi-line bodies.
