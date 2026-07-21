@@ -30,7 +30,7 @@ Future<void> runSync(Ref ref) async {
 class WgerRepository {
   final AppDatabase _db;
   final _logger = Logger();
-  
+
   WgerRepository(this._db);
 
   Future<bool> isSynced() async {

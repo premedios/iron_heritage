@@ -32,7 +32,7 @@ class Exercises extends Table {
   IntColumn get id => integer().autoIncrement()();
   IntColumn get wgerId => integer().unique().nullable()(); // The ID from Wger
   TextColumn get name => text()();
-  
+
   // Metadata Columns for Smart Alternatives
   TextColumn get category => text().nullable()(); // e.g., "Arms", "Chest"
   TextColumn get primaryMuscles => text().map(const ListConverter()).nullable()(); // e.g. ["Pectoralis major"]

@@ -39,19 +39,19 @@ List<Exercise> getSmartAlternatives(Exercise occupiedExercise) {
   // Filter 1: Exact Primary Muscle Match (ignoring the occupied exercise itself)
   final viable = mockDatabase.where((ex) {
     if (ex.name == occupiedExercise.name) return false;
-    
+
     // Check if any primary muscle matches
     return ex.primaryMuscles.any((m) => occupiedExercise.primaryMuscles.contains(m));
   }).toList();
 
   // Determine the starting equipment of the occupied exercise
   String startingEquip = occupiedExercise.equipment.firstWhere(
-    (e) => priorityChain.contains(e), 
+    (e) => priorityChain.contains(e),
     orElse: () => priorityChain.first
   );
 
   int startIndex = priorityChain.indexOf(startingEquip);
-  
+
   // Create a custom sorted priority list that wraps around
   // E.g., if starting is "Cable", order is: Cable, Machine, Dumbbell, Bodyweight, Barbell, Smith Machine
   List<String> wrapAroundPriority = [
@@ -63,7 +63,7 @@ List<Exercise> getSmartAlternatives(Exercise occupiedExercise) {
   viable.sort((a, b) {
     String equipA = a.equipment.firstWhere((e) => wrapAroundPriority.contains(e), orElse: () => 'Bodyweight');
     String equipB = b.equipment.firstWhere((e) => wrapAroundPriority.contains(e), orElse: () => 'Bodyweight');
-    
+
     return wrapAroundPriority.indexOf(equipA).compareTo(wrapAroundPriority.indexOf(equipB));
   });
 
