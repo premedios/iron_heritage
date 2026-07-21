@@ -261,6 +261,41 @@ void main() {
       expect(results.single.id, 2);
     });
 
+    test('keeps the highest-ranked exercise when names are duplicated', () {
+      const lowerRankedDuplicate = Exercise(
+        id: 60,
+        name: 'Duplicate Press',
+        category: 'Chest',
+        primaryMuscles: ['Pectoralis major'],
+        equipment: ['Dumbbell'],
+        mechanic: 'Isolation',
+        force: 'Push',
+        movementPattern: 'Fly',
+      );
+      const higherRankedDuplicate = Exercise(
+        id: 61,
+        name: ' duplicate press ',
+        category: 'Chest',
+        primaryMuscles: ['Pectoralis major'],
+        equipment: ['Smith Machine'],
+        mechanic: 'Compound',
+        force: 'Push',
+        movementPattern: 'Press',
+      );
+
+      final results = service.findAlternatives(
+        occupiedExercise: occupiedBenchPress,
+        allExercises: [
+          occupiedBenchPress,
+          lowerRankedDuplicate,
+          higherRankedDuplicate,
+        ],
+      );
+
+      expect(results, hasLength(1));
+      expect(results.single.id, 61);
+    });
+
     test('normalizes whitespace and case in scoring and equipment tiers', () {
       const formattedSmithPress = Exercise(
         id: 40,

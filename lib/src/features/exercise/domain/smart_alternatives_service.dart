@@ -34,7 +34,6 @@ class SmartAlternativesService {
   }) {
     final occupiedMuscles = _normalizeAll(occupiedExercise.primaryMuscles);
     if (occupiedMuscles.isEmpty) return const [];
-    final seenCandidateNames = <String>{};
 
     // 1. Filter out the occupied exercise itself
     final candidates = allExercises.where((ex) {
@@ -50,13 +49,11 @@ class SmartAlternativesService {
       };
       if (!occupiedMuscles.any(candidateMuscles.contains)) return false;
 
-      final qualifies =
-          calculateRelevanceScore(
+      return calculateRelevanceScore(
             occupiedExercise: occupiedExercise,
             candidate: ex,
           ) >=
           minimumRelevanceScore;
-      return qualifies && seenCandidateNames.add(normalizedName);
     }).toList();
 
     // 3. Equipment Priority Chain Wrap-Around
@@ -100,10 +97,18 @@ class SmartAlternativesService {
       final scoreComparison = scoreB.compareTo(scoreA);
       if (scoreComparison != 0) return scoreComparison;
 
-      return _normalize(a.name).compareTo(_normalize(b.name));
+      final nameComparison = _normalize(a.name).compareTo(_normalize(b.name));
+      if (nameComparison != 0) return nameComparison;
+
+      return a.id.compareTo(b.id);
     });
 
-    return candidates;
+    final seenCandidateNames = <String>{};
+    return candidates
+        .where(
+          (candidate) => seenCandidateNames.add(_normalize(candidate.name)),
+        )
+        .toList();
   }
 
   /// Scores how closely [candidate] preserves the intent of [occupiedExercise].
@@ -118,17 +123,18 @@ class SmartAlternativesService {
 
     final candidatePrimary = _normalizeAll(candidate.primaryMuscles);
     final candidateSecondary = _normalizeAll(candidate.secondaryMuscles);
-    var coveredTargets = 0.0;
+    var targetCoverageCredits = 0.0;
 
     for (final target in occupiedTargets) {
       if (candidatePrimary.contains(target)) {
-        coveredTargets += 1;
+        targetCoverageCredits += 1;
       } else if (candidateSecondary.contains(target)) {
-        coveredTargets += 0.5;
+        targetCoverageCredits += 0.5;
       }
     }
 
-    var score = (coveredTargets / occupiedTargets.length) * targetMuscleWeight;
+    var score =
+        (targetCoverageCredits / occupiedTargets.length) * targetMuscleWeight;
     if (_matches(occupiedExercise.mechanic, candidate.mechanic)) {
       score += mechanicWeight;
     }
