@@ -4,7 +4,7 @@ Date: 2026-07-19
 
 ## Status
 
-Accepted
+Superseded by [ADR-0003](0003-weighted-smart-alternatives.md)
 
 ## Context
 
