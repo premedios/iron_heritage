@@ -163,6 +163,10 @@ void main() {
     expect(find.text('Build your routine'), findsOneWidget);
     expect(find.text('Create or Choose Routine'), findsOneWidget);
     expect(find.text('Start Empty Workout'), findsOneWidget);
+    expect(
+      find.text('Your first completed workout will appear here.'),
+      findsOneWidget,
+    );
 
     await tester.tap(find.text('Create or Choose Routine'));
 
@@ -428,5 +432,84 @@ void main() {
 
     expect(find.text('Start Workout'), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  for (final testCase in const [
+    (label: 'Start now', action: HomeAction.startMissedWorkout),
+    (label: 'Skip', action: HomeAction.skipMissedWorkout),
+  ]) {
+    testWidgets('missed workout emits ${testCase.label} intent', (
+      tester,
+    ) async {
+      final actions = <HomeAction>[];
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: HomeScreen(
+            state: HomeViewState(
+              hero: MissedWorkoutHomeHero(
+                routineName: 'Push Pull Legs',
+                templateName: 'Pull',
+                scheduledDate: DateTime(2026, 7, 21),
+              ),
+            ),
+            today: DateTime(2026, 7, 22),
+            onAction: actions.add,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text(testCase.label));
+      await tester.pumpAndSettle();
+
+      expect(actions, [testCase.action]);
+    });
+  }
+
+  testWidgets('home exposes useful semantics for context and progress', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HomeScreen(
+          state: const HomeViewState(
+            hero: ActiveWorkoutHomeHero(
+              workoutName: 'Push',
+              elapsed: Duration(minutes: 32),
+              completedExercises: 4,
+              totalExercises: 6,
+            ),
+            lastWorkout: LastWorkoutSummary(
+              name: 'Pull',
+              duration: Duration(minutes: 68),
+              volumeKilograms: 12480,
+              improvementPercent: 4.2,
+            ),
+          ),
+          today: DateTime(2026, 7, 22),
+          onAction: (_) {},
+        ),
+      ),
+    );
+
+    expect(find.bySemanticsLabel('Today, July 22'), findsOneWidget);
+    expect(
+      find.bySemanticsLabel(
+        'Workout in progress: Push, 32 minutes, 4 of 6 exercises completed',
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.bySemanticsLabel(
+        'Last Workout: Pull, 68 minutes, 12,480 kilograms, '
+        '4.2 percent improvement versus previous',
+      ),
+      findsOneWidget,
+    );
+    expect(find.byTooltip('Settings'), findsOneWidget);
+    semantics.dispose();
   });
 }

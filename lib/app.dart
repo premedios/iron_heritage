@@ -1,14 +1,14 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'flavors.dart';
 
 import 'src/core/theme/app_theme.dart';
+import 'src/features/home/presentation/home_controller.dart';
+import 'src/features/home/presentation/home_screen.dart';
 import 'src/features/sync/data/wger_repository.dart';
 import 'src/features/sync/presentation/sync_screen.dart';
-import 'src/features/home/presentation/home_screen.dart';
-import 'src/features/home/presentation/home_view_state.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class App extends ConsumerWidget {
   const App({super.key});
@@ -16,6 +16,7 @@ class App extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isSyncedAsync = ref.watch(isSyncedProvider);
+    final homeState = ref.watch(homeViewStateProvider);
 
     return MaterialApp(
       title: F.title,
@@ -25,9 +26,9 @@ class App extends ConsumerWidget {
           data: (isSynced) {
             if (isSynced) {
               return HomeScreen(
-                state: const HomeViewState(hero: NoRoutineHomeHero()),
+                state: homeState,
                 today: DateTime.now(),
-                onAction: _handleHomeAction,
+                onAction: ref.read(homeActionEventProvider.notifier).dispatch,
               );
             } else {
               return const SyncScreen();
@@ -42,8 +43,6 @@ class App extends ConsumerWidget {
       ),
     );
   }
-
-  void _handleHomeAction(HomeAction action) {}
 
   Widget _flavorBanner({required Widget child, bool show = true}) => show
       ? Banner(

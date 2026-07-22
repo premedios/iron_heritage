@@ -19,7 +19,8 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  String? _promptedMissedWorkout;
+  ({String routineName, String templateName, DateTime scheduledDate})?
+  _promptedMissedWorkout;
 
   @override
   Widget build(BuildContext context) {
@@ -62,15 +63,20 @@ class _HomeScreenState extends State<HomeScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'TODAY',
-                        style: Theme.of(context).textTheme.headlineMedium,
-                      ),
-                      Text(_formattedDate(widget.today)),
-                    ],
+                  child: Semantics(
+                    header: true,
+                    label: 'Today, ${_spokenDate(widget.today)}',
+                    excludeSemantics: true,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'TODAY',
+                          style: Theme.of(context).textTheme.headlineMedium,
+                        ),
+                        Text(_formattedDate(widget.today)),
+                      ],
+                    ),
                   ),
                 ),
                 IconButton(
@@ -101,26 +107,34 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildErrorBanner(BuildContext context, String message) {
     final colors = Theme.of(context).colorScheme;
-    return Material(
-      color: colors.errorContainer,
-      borderRadius: BorderRadius.circular(12),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Row(
-          children: [
-            Icon(Icons.warning_amber_rounded, color: colors.onErrorContainer),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                message,
-                style: TextStyle(color: colors.onErrorContainer),
+    return Semantics(
+      container: true,
+      liveRegion: true,
+      label: 'Home refresh failed: $message',
+      child: Material(
+        color: colors.errorContainer,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            children: [
+              Icon(Icons.warning_amber_rounded, color: colors.onErrorContainer),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  message,
+                  style: TextStyle(color: colors.onErrorContainer),
+                ),
               ),
-            ),
-            TextButton(
-              onPressed: () => widget.onAction(HomeAction.retry),
-              child: const Text('Retry'),
-            ),
-          ],
+              TextButton(
+                style: TextButton.styleFrom(
+                  foregroundColor: colors.onErrorContainer,
+                ),
+                onPressed: () => widget.onAction(HomeAction.retry),
+                child: const Text('Retry'),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -181,36 +195,40 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     }
 
-    return Card(
-      child: InkWell(
-        onTap: () => widget.onAction(HomeAction.openLastWorkout),
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('LAST WORKOUT'),
-              const SizedBox(height: 8),
-              Text(
-                summary.name,
-                style: Theme.of(context).textTheme.headlineSmall,
-              ),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 16,
-                runSpacing: 8,
-                children: [
-                  Text('${summary.duration.inMinutes} min'),
-                  Text('${_formattedInteger(summary.volumeKilograms)} kg'),
-                  if (summary.improvementPercent != null)
-                    Text(
-                      '${summary.improvementPercent! >= 0 ? '+' : ''}'
-                      '${summary.improvementPercent!.toStringAsFixed(1)}% '
-                      'vs previous',
-                    ),
-                ],
-              ),
-            ],
+    return Semantics(
+      container: true,
+      label: _lastWorkoutSemantics(summary),
+      child: Card(
+        child: InkWell(
+          onTap: () => widget.onAction(HomeAction.openLastWorkout),
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('LAST WORKOUT'),
+                const SizedBox(height: 8),
+                Text(
+                  summary.name,
+                  style: Theme.of(context).textTheme.headlineSmall,
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 16,
+                  runSpacing: 8,
+                  children: [
+                    Text('${summary.duration.inMinutes} min'),
+                    Text('${_formattedInteger(summary.volumeKilograms)} kg'),
+                    if (summary.improvementPercent != null)
+                      Text(
+                        '${summary.improvementPercent! >= 0 ? '+' : ''}'
+                        '${summary.improvementPercent!.toStringAsFixed(1)}% '
+                        'vs previous',
+                      ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -316,32 +334,39 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _activeWorkoutHero(BuildContext context, ActiveWorkoutHomeHero hero) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Workout in progress'),
-            const SizedBox(height: 8),
-            Text(
-              hero.workoutName,
-              style: Theme.of(context).textTheme.headlineSmall,
-            ),
-            const SizedBox(height: 16),
-            Text('${_formattedElapsed(hero.elapsed)} elapsed'),
-            Text(
-              '${hero.completedExercises} of ${hero.totalExercises} exercises',
-            ),
-            const SizedBox(height: 20),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () => widget.onAction(HomeAction.resumeWorkout),
-                child: const Text('Resume Workout'),
+    return Semantics(
+      container: true,
+      label:
+          'Workout in progress: ${hero.workoutName}, '
+          '${hero.elapsed.inMinutes} minutes, '
+          '${hero.completedExercises} of ${hero.totalExercises} exercises completed',
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Workout in progress'),
+              const SizedBox(height: 8),
+              Text(
+                hero.workoutName,
+                style: Theme.of(context).textTheme.headlineSmall,
               ),
-            ),
-          ],
+              const SizedBox(height: 16),
+              Text('${_formattedElapsed(hero.elapsed)} elapsed'),
+              Text(
+                '${hero.completedExercises} of ${hero.totalExercises} exercises',
+              ),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => widget.onAction(HomeAction.resumeWorkout),
+                  child: const Text('Resume Workout'),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -406,10 +431,16 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _queueMissedWorkoutPrompt(BuildContext context, HomeHeroState hero) {
-    if (hero is! MissedWorkoutHomeHero) return;
+    if (hero is! MissedWorkoutHomeHero) {
+      _promptedMissedWorkout = null;
+      return;
+    }
 
-    final promptKey =
-        '${hero.templateName}-${hero.scheduledDate.toIso8601String()}';
+    final promptKey = (
+      routineName: hero.routineName,
+      templateName: hero.templateName,
+      scheduledDate: hero.scheduledDate,
+    );
     if (_promptedMissedWorkout == promptKey) return;
     _promptedMissedWorkout = promptKey;
 
@@ -477,5 +508,20 @@ class _HomeScreenState extends State<HomeScreen> {
       'DECEMBER',
     ];
     return '${months[date.month - 1]} ${date.day}';
+  }
+
+  String _spokenDate(DateTime date) {
+    final formatted = _formattedDate(date).toLowerCase();
+    return '${formatted[0].toUpperCase()}${formatted.substring(1)}';
+  }
+
+  String _lastWorkoutSemantics(LastWorkoutSummary summary) {
+    final comparison = summary.improvementPercent == null
+        ? ''
+        : ', ${summary.improvementPercent!.toStringAsFixed(1)} percent '
+              'improvement versus previous';
+    return 'Last Workout: ${summary.name}, ${summary.duration.inMinutes} '
+        'minutes, ${_formattedInteger(summary.volumeKilograms)} kilograms'
+        '$comparison';
   }
 }
