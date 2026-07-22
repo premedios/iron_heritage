@@ -5,8 +5,12 @@ Core vocabulary for the Iron Heritage workout application, targeted at bodybuild
 ## Language
 
 **Routine**:
-A long-term training plan or structural template (e.g., Push-Pull-Legs) that dictates the sequence of exercises.
+A multi-day training plan (e.g., Push-Pull-Legs) that defines the order of its planned training days.
 _Avoid_: Program, schedule, workout
+
+**Workout Template**:
+A reusable prescription for one training day within a Routine. Starting it creates a Workout.
+_Avoid_: Routine Day, planned Workout
 
 **Workout**:
 A single, specific training session executed on a given day.
