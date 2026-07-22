@@ -510,6 +510,81 @@ void main() {
       findsOneWidget,
     );
     expect(find.byTooltip('Settings'), findsOneWidget);
+    expect(find.bySemanticsLabel(RegExp(r'Home')), findsOneWidget);
+    expect(find.bySemanticsLabel(RegExp(r'Routines')), findsOneWidget);
+    expect(find.bySemanticsLabel(RegExp(r'Calendar')), findsOneWidget);
     semantics.dispose();
+  });
+
+  testWidgets('every Home action meets the minimum touch target', (
+    tester,
+  ) async {
+    Future<void> pump(HomeViewState state) {
+      return tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.darkTheme,
+          home: HomeScreen(
+            state: state,
+            today: DateTime(2026, 7, 22),
+            onAction: (_) {},
+          ),
+        ),
+      );
+    }
+
+    void expectTarget(Finder finder) {
+      expect(tester.getSize(finder).height, greaterThanOrEqualTo(48));
+    }
+
+    await pump(
+      const HomeViewState(
+        hero: ActiveWorkoutHomeHero(
+          workoutName: 'Push',
+          elapsed: Duration(minutes: 12),
+          completedExercises: 1,
+          totalExercises: 6,
+        ),
+      ),
+    );
+    expectTarget(find.widgetWithText(ElevatedButton, 'Resume Workout'));
+    expectTarget(find.byType(NavigationBar));
+
+    await pump(
+      const HomeViewState(
+        hero: ScheduledWorkoutHomeHero(
+          routineName: 'Push Pull Legs',
+          templateName: 'Push',
+          exerciseCount: 6,
+          estimatedDuration: Duration(minutes: 75),
+          targetMuscleGroups: ['Chest', 'Shoulders', 'Triceps'],
+        ),
+      ),
+    );
+    expectTarget(find.widgetWithText(ElevatedButton, 'Start Workout'));
+    expectTarget(find.widgetWithText(TextButton, 'Start Empty Workout'));
+
+    await pump(
+      HomeViewState(
+        hero: RestDayHomeHero(
+          nextTemplateName: 'Legs',
+          nextWorkoutDate: DateTime(2026, 7, 24),
+        ),
+      ),
+    );
+    expectTarget(find.widgetWithText(TextButton, 'Start Early'));
+
+    await pump(
+      HomeViewState(
+        hero: MissedWorkoutHomeHero(
+          routineName: 'Push Pull Legs',
+          templateName: 'Pull',
+          scheduledDate: DateTime(2026, 7, 21),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expectTarget(find.widgetWithText(ElevatedButton, 'Start now'));
+    expectTarget(find.widgetWithText(OutlinedButton, 'Reschedule'));
+    expectTarget(find.widgetWithText(TextButton, 'Skip'));
   });
 }
