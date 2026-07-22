@@ -1,0 +1,162 @@
+[
+  {
+    "name": "Barbell Bench Press",
+    "category": "Chest",
+    "primaryMuscles": ["Pectoralis major"],
+    "secondaryMuscles": ["Anterior deltoid", "Triceps brachii"],
+    "equipment": ["Barbell", "Bench"],
+    "mechanic": "Compound",
+    "force": "Push",
+    "movementPattern": "Press"
+  },
+  {
+    "name": "Dumbbell Bench Press",
+    "category": "Chest",
+    "primaryMuscles": ["Pectoralis major"],
+    "secondaryMuscles": ["Anterior deltoid", "Triceps brachii"],
+    "equipment": ["Dumbbell", "Bench"],
+    "mechanic": "Compound",
+    "force": "Push",
+    "movementPattern": "Press"
+  },
+  {
+    "name": "Smith Machine Bench Press",
+    "category": "Chest",
+    "primaryMuscles": ["Pectoralis major"],
+    "secondaryMuscles": ["Anterior deltoid", "Triceps brachii"],
+    "equipment": ["Smith Machine", "Bench"],
+    "mechanic": "Compound",
+    "force": "Push",
+    "movementPattern": "Press"
+  },
+  {
+    "name": "Push-up",
+    "category": "Chest",
+    "primaryMuscles": ["Pectoralis major"],
+    "secondaryMuscles": ["Anterior deltoid", "Triceps brachii"],
+    "equipment": ["Bodyweight"],
+    "mechanic": "Compound",
+    "force": "Push",
+    "movementPattern": "Press"
+  },
+  {
+    "name": "Cable Crossover",
+    "category": "Chest",
+    "primaryMuscles": ["Pectoralis major"],
+    "secondaryMuscles": ["Anterior deltoid"],
+    "equipment": ["Cable"],
+    "mechanic": "Isolation",
+    "force": "Push",
+    "movementPattern": "Fly"
+  },
+  {
+    "name": "Pec Deck",
+    "category": "Chest",
+    "primaryMuscles": ["Pectoralis major"],
+    "secondaryMuscles": ["Anterior deltoid"],
+    "equipment": ["Machine"],
+    "mechanic": "Isolation",
+    "force": "Push",
+    "movementPattern": "Fly"
+  },
+  {
+    "name": "Dumbbell Fly",
+    "category": "Chest",
+    "primaryMuscles": ["Pectoralis major"],
+    "secondaryMuscles": ["Anterior deltoid"],
+    "equipment": ["Dumbbell", "Bench"],
+    "mechanic": "Isolation",
+    "force": "Push",
+    "movementPattern": "Fly"
+  },
+  {
+    "name": "Barbell Squat",
+    "category": "Legs",
+    "primaryMuscles": ["Quadriceps", "Gluteus maximus"],
+    "secondaryMuscles": ["Hamstrings", "Adductors", "Erector spinae"],
+    "equipment": ["Barbell", "Squat Rack"],
+    "mechanic": "Compound",
+    "force": "Push",
+    "movementPattern": "Squat"
+  },
+  {
+    "name": "Conventional Deadlift",
+    "category": "Back",
+    "primaryMuscles": ["Erector spinae", "Gluteus maximus", "Hamstrings"],
+    "secondaryMuscles": ["Latissimus dorsi", "Trapezius", "Quadriceps"],
+    "equipment": ["Barbell"],
+    "mechanic": "Compound",
+    "force": "Pull",
+    "movementPattern": "Hinge"
+  },
+  {
+    "name": "Overhead Press",
+    "category": "Shoulders",
+    "primaryMuscles": ["Anterior deltoid"],
+    "secondaryMuscles": ["Lateral deltoid", "Triceps brachii", "Upper trapezius"],
+    "equipment": ["Barbell"],
+    "mechanic": "Compound",
+    "force": "Push",
+    "movementPattern": "Press"
+  },
+  {
+    "name": "Pull-up",
+    "category": "Back",
+    "primaryMuscles": ["Latissimus dorsi"],
+    "secondaryMuscles": ["Biceps brachii", "Rhomboids", "Lower trapezius"],
+    "equipment": ["Pull-up Bar"],
+    "mechanic": "Compound",
+    "force": "Pull",
+    "movementPattern": "Pulldown"
+  },
+  {
+    "name": "Barbell Row",
+    "category": "Back",
+    "primaryMuscles": ["Latissimus dorsi", "Rhomboids"],
+    "secondaryMuscles": ["Biceps brachii", "Erector spinae", "Posterior deltoid"],
+    "equipment": ["Barbell"],
+    "mechanic": "Compound",
+    "force": "Pull",
+    "movementPattern": "Row"
+  },
+  {
+    "name": "Dumbbell Lateral Raise",
+    "category": "Shoulders",
+    "primaryMuscles": ["Lateral deltoid"],
+    "secondaryMuscles": ["Anterior deltoid", "Supraspinatus"],
+    "equipment": ["Dumbbell"],
+    "mechanic": "Isolation",
+    "force": "Push",
+    "movementPattern": "Raise"
+  },
+  {
+    "name": "Barbell Bicep Curl",
+    "category": "Arms",
+    "primaryMuscles": ["Biceps brachii"],
+    "secondaryMuscles": ["Brachialis", "Brachioradialis"],
+    "equipment": ["Barbell"],
+    "mechanic": "Isolation",
+    "force": "Pull",
+    "movementPattern": "Curl"
+  },
+  {
+    "name": "Triceps Pushdown",
+    "category": "Arms",
+    "primaryMuscles": ["Triceps brachii"],
+    "secondaryMuscles": [],
+    "equipment": ["Cable"],
+    "mechanic": "Isolation",
+    "force": "Push",
+    "movementPattern": "Extension"
+  },
+  {
+    "name": "Leg Press",
+    "category": "Legs",
+    "primaryMuscles": ["Quadriceps"],
+    "secondaryMuscles": ["Gluteus maximus", "Hamstrings"],
+    "equipment": ["Machine"],
+    "mechanic": "Compound",
+    "force": "Push",
+    "movementPattern": "Press"
+  }
+]

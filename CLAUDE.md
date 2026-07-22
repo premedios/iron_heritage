@@ -123,3 +123,18 @@ abstract class MyModel with _$MyModel {
   factory MyModel.fromJson(Map<String, dynamic> json) => _$MyModelFromJson(json);
 }
 ```
+
+## Agent skills
+
+### Issue tracker
+
+Issues are tracked in YouTrack project `IH` at
+`http://192.168.1.67:8880`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Using the default canonical triage roles. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context repository layout. See `docs/agents/domain.md`.
