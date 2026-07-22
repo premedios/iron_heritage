@@ -3,11 +3,11 @@ import 'package:flutter/material.dart';
 
 import 'flavors.dart';
 
-
 import 'src/core/theme/app_theme.dart';
 import 'src/features/sync/data/wger_repository.dart';
 import 'src/features/sync/presentation/sync_screen.dart';
-import 'src/features/dashboard/presentation/dashboard_screen.dart';
+import 'src/features/home/presentation/home_screen.dart';
+import 'src/features/home/presentation/home_view_state.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class App extends ConsumerWidget {
@@ -24,22 +24,26 @@ class App extends ConsumerWidget {
         child: isSyncedAsync.when(
           data: (isSynced) {
             if (isSynced) {
-              return const DashboardScreen();
+              return HomeScreen(
+                state: const HomeViewState(hero: NoRoutineHomeHero()),
+                today: DateTime.now(),
+                onAction: _handleHomeAction,
+              );
             } else {
               return const SyncScreen();
             }
           },
-          loading: () => const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
-          ),
-          error: (err, stack) => Scaffold(
-            body: Center(child: Text('Error: $err')),
-          ),
+          loading: () =>
+              const Scaffold(body: Center(child: CircularProgressIndicator())),
+          error: (err, stack) =>
+              Scaffold(body: Center(child: Text('Error: $err'))),
         ),
         show: kDebugMode,
       ),
     );
   }
+
+  void _handleHomeAction(HomeAction action) {}
 
   Widget _flavorBanner({required Widget child, bool show = true}) => show
       ? Banner(
