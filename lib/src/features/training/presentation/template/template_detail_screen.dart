@@ -45,16 +45,9 @@ final class _TemplateDetailScreenState extends State<TemplateDetailScreen> {
     final loadIdentityChanged =
         oldWidget.templateId != widget.templateId ||
         !identical(oldWidget.repository, widget.repository);
-    final operationIdentityChanged =
-        loadIdentityChanged ||
-        !identical(oldWidget.onStartWorkout, widget.onStartWorkout) ||
-        !identical(oldWidget.onEdit, widget.onEdit) ||
-        !identical(oldWidget.onArchived, widget.onArchived);
-    if (operationIdentityChanged) {
+    if (loadIdentityChanged) {
       _operationGeneration++;
       _writing = false;
-    }
-    if (loadIdentityChanged) {
       _template = null;
       _load();
     }
@@ -158,7 +151,6 @@ final class _TemplateDetailScreenState extends State<TemplateDetailScreen> {
     final generation = ++_operationGeneration;
     final templateId = widget.templateId;
     final repository = widget.repository;
-    final onArchived = widget.onArchived;
     final verb = archived ? 'Archive' : 'Restore';
     final confirmed = await showDialog<bool>(
       context: context,
@@ -186,7 +178,6 @@ final class _TemplateDetailScreenState extends State<TemplateDetailScreen> {
           generation: generation,
           templateId: templateId,
           repository: repository,
-          onArchived: onArchived,
         )) {
       await _setArchived(
         archived: archived,
@@ -194,7 +185,6 @@ final class _TemplateDetailScreenState extends State<TemplateDetailScreen> {
         templateId: templateId,
         repository: repository,
         template: template,
-        onArchived: onArchived,
       );
     }
   }
@@ -205,14 +195,12 @@ final class _TemplateDetailScreenState extends State<TemplateDetailScreen> {
     required int templateId,
     required TrainingRepository repository,
     required WorkoutTemplateDraft template,
-    required VoidCallback onArchived,
   }) async {
     if (_writing ||
         !_isCurrentOperation(
           generation: generation,
           templateId: templateId,
           repository: repository,
-          onArchived: onArchived,
         )) {
       return;
     }
@@ -223,7 +211,6 @@ final class _TemplateDetailScreenState extends State<TemplateDetailScreen> {
         generation: generation,
         templateId: templateId,
         repository: repository,
-        onArchived: onArchived,
       )) {
         return;
       }
@@ -232,14 +219,13 @@ final class _TemplateDetailScreenState extends State<TemplateDetailScreen> {
         _writing = false;
       });
       if (archived) {
-        onArchived();
+        widget.onArchived();
       }
     } on Object catch (error) {
       if (!_isCurrentOperation(
         generation: generation,
         templateId: templateId,
         repository: repository,
-        onArchived: onArchived,
       )) {
         return;
       }
@@ -261,13 +247,11 @@ final class _TemplateDetailScreenState extends State<TemplateDetailScreen> {
     required int generation,
     required int templateId,
     required TrainingRepository repository,
-    required VoidCallback onArchived,
   }) {
     return mounted &&
         generation == _operationGeneration &&
         templateId == widget.templateId &&
-        identical(repository, widget.repository) &&
-        identical(onArchived, widget.onArchived);
+        identical(repository, widget.repository);
   }
 
   static WorkoutTemplateDraft _withArchivedAt(

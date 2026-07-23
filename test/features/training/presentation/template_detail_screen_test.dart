@@ -466,6 +466,109 @@ void main() {
     expect(find.text('Upper'), findsNothing);
   });
 
+  testWidgets('callback rebuild keeps same-resource confirmation valid', (
+    tester,
+  ) async {
+    final repository = _DetailRepository(template());
+    var firstCallbacks = 0;
+    var secondCallbacks = 0;
+    VoidCallback onArchived = () => firstCallbacks++;
+    StateSetter? refresh;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: StatefulBuilder(
+          builder: (context, setState) {
+            refresh = setState;
+            return TemplateDetailScreen(
+              templateId: 7,
+              repository: repository,
+              onStartWorkout: () {},
+              onEdit: (_) {},
+              onArchived: onArchived,
+            );
+          },
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.tap(find.byTooltip('More Template actions'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Archive'));
+    await tester.pumpAndSettle();
+
+    onArchived = () => secondCallbacks++;
+    refresh!(() {});
+    await tester.pump();
+    await tester.tap(find.widgetWithText(FilledButton, 'Archive'));
+    await tester.pumpAndSettle();
+
+    expect(repository.archiveCalls, [(id: 7, archived: true)]);
+    expect(firstCallbacks, 0);
+    expect(secondCallbacks, 1);
+    expect(find.text('Start Workout'), findsNothing);
+  });
+
+  testWidgets('callback rebuild keeps same-resource write busy and current', (
+    tester,
+  ) async {
+    final repository = _DetailRepository(template())..delayArchive = true;
+    var firstCallbacks = 0;
+    var secondCallbacks = 0;
+    VoidCallback onArchived = () => firstCallbacks++;
+    StateSetter? refresh;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: StatefulBuilder(
+          builder: (context, setState) {
+            refresh = setState;
+            return TemplateDetailScreen(
+              templateId: 7,
+              repository: repository,
+              onStartWorkout: () {},
+              onEdit: (_) {},
+              onArchived: onArchived,
+            );
+          },
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.tap(find.byTooltip('More Template actions'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Archive'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Archive'));
+    await tester.pump(const Duration(seconds: 1));
+
+    onArchived = () => secondCallbacks++;
+    refresh!(() {});
+    await tester.pump();
+    expect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is Semantics &&
+            widget.properties.label == 'Archiving Template',
+      ),
+      findsOneWidget,
+    );
+    expect(
+      tester
+          .widget<PopupMenuButton>(
+            find.byWidgetPredicate((widget) => widget is PopupMenuButton),
+          )
+          .enabled,
+      isFalse,
+    );
+
+    repository.completeArchive();
+    await tester.pumpAndSettle();
+
+    expect(repository.archiveCalls, [(id: 7, archived: true)]);
+    expect(firstCallbacks, 0);
+    expect(secondCallbacks, 1);
+    expect(find.text('Start Workout'), findsNothing);
+  });
+
   testWidgets('actions and ordered cards expose accessible semantics', (
     tester,
   ) async {
