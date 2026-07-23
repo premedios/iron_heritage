@@ -29,6 +29,10 @@ final class FakeTrainingRepository implements TrainingRepository {
   Object? routineWatchError;
   bool templateWatchPending = false;
   bool routineWatchPending = false;
+  int templateWatchSubscriptions = 0;
+  int templateWatchCancellations = 0;
+  int routineWatchSubscriptions = 0;
+  int routineWatchCancellations = 0;
 
   final _templateChanges = StreamController<void>.broadcast();
   final _routineChanges = StreamController<void>.broadcast();
@@ -43,22 +47,38 @@ final class FakeTrainingRepository implements TrainingRepository {
   Stream<List<WorkoutTemplateSummary>> watchTemplates({
     required bool archived,
     String query = '',
-  }) async* {
-    if (templateWatchPending) {
-      await Completer<void>().future;
-    }
-    final initialError = templateWatchError;
-    if (initialError != null) {
-      throw initialError;
-    }
-    yield _filteredTemplates(archived: archived, query: query);
-    await for (final _ in _templateChanges.stream) {
-      final error = templateWatchError;
-      if (error != null) {
-        throw error;
+  }) {
+    return Stream.multi((controller) {
+      templateWatchSubscriptions++;
+      controller.onCancel = () {
+        templateWatchCancellations++;
+      };
+      if (templateWatchPending) {
+        return;
       }
-      yield _filteredTemplates(archived: archived, query: query);
-    }
+      final initialError = templateWatchError;
+      if (initialError != null) {
+        controller
+          ..addError(initialError)
+          ..close();
+        return;
+      }
+      controller.add(_filteredTemplates(archived: archived, query: query));
+      final subscription = _templateChanges.stream.listen((_) {
+        final error = templateWatchError;
+        if (error != null) {
+          controller
+            ..addError(error)
+            ..close();
+          return;
+        }
+        controller.add(_filteredTemplates(archived: archived, query: query));
+      });
+      controller.onCancel = () async {
+        templateWatchCancellations++;
+        await subscription.cancel();
+      };
+    });
   }
 
   @override
@@ -68,11 +88,11 @@ final class FakeTrainingRepository implements TrainingRepository {
 
   @override
   Future<int> saveTemplate(WorkoutTemplateDraft draft) async {
+    savedTemplates.add(draft);
     final error = saveError;
     if (error != null) {
       throw error;
     }
-    savedTemplates.add(draft);
     final id = draft.id ?? _nextTemplateId++;
     templateDraftsById[id] = draft;
     return id;
@@ -100,22 +120,38 @@ final class FakeTrainingRepository implements TrainingRepository {
   Stream<List<RoutineSummary>> watchRoutines({
     required bool archived,
     String query = '',
-  }) async* {
-    if (routineWatchPending) {
-      await Completer<void>().future;
-    }
-    final initialError = routineWatchError;
-    if (initialError != null) {
-      throw initialError;
-    }
-    yield _filteredRoutines(archived: archived, query: query);
-    await for (final _ in _routineChanges.stream) {
-      final error = routineWatchError;
-      if (error != null) {
-        throw error;
+  }) {
+    return Stream.multi((controller) {
+      routineWatchSubscriptions++;
+      controller.onCancel = () {
+        routineWatchCancellations++;
+      };
+      if (routineWatchPending) {
+        return;
       }
-      yield _filteredRoutines(archived: archived, query: query);
-    }
+      final initialError = routineWatchError;
+      if (initialError != null) {
+        controller
+          ..addError(initialError)
+          ..close();
+        return;
+      }
+      controller.add(_filteredRoutines(archived: archived, query: query));
+      final subscription = _routineChanges.stream.listen((_) {
+        final error = routineWatchError;
+        if (error != null) {
+          controller
+            ..addError(error)
+            ..close();
+          return;
+        }
+        controller.add(_filteredRoutines(archived: archived, query: query));
+      });
+      controller.onCancel = () async {
+        routineWatchCancellations++;
+        await subscription.cancel();
+      };
+    });
   }
 
   @override
@@ -125,11 +161,11 @@ final class FakeTrainingRepository implements TrainingRepository {
 
   @override
   Future<int> saveRoutine(RoutineDraft draft) async {
+    savedRoutines.add(draft);
     final error = routineSaveError;
     if (error != null) {
       throw error;
     }
-    savedRoutines.add(draft);
     final id = draft.id ?? _nextRoutineId++;
     routineDraftsById[id] = draft;
     return id;

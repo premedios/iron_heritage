@@ -64,6 +64,9 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen>
   Widget build(BuildContext context) {
     final creatingTemplate =
         _selectedContentType == TrainingContentType.templates;
+    final searchActionLabel = _searchVisible
+        ? 'Close Search'
+        : 'Search Training';
     return Scaffold(
       appBar: AppBar(
         title: Stack(
@@ -96,10 +99,16 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen>
           ],
         ),
         actions: [
-          IconButton(
-            tooltip: 'Search Training',
-            onPressed: () => setState(() => _searchVisible = !_searchVisible),
-            icon: Icon(_searchVisible ? Icons.close : Icons.search),
+          Semantics(
+            label: searchActionLabel,
+            button: true,
+            excludeSemantics: true,
+            onTap: () => setState(() => _searchVisible = !_searchVisible),
+            child: IconButton(
+              tooltip: searchActionLabel,
+              onPressed: () => setState(() => _searchVisible = !_searchVisible),
+              icon: Icon(_searchVisible ? Icons.close : Icons.search),
+            ),
           ),
           IconButton(
             tooltip: creatingTemplate ? 'Create Template' : 'Create Routine',

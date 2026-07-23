@@ -55,6 +55,39 @@ Future<FakeTrainingRepository> pumpTraining(
 }
 
 void main() {
+  test(
+    'list providers cancel repository streams after listeners close',
+    () async {
+      final fake = FakeTrainingRepository();
+      final container = ProviderContainer(
+        overrides: [trainingRepositoryProvider.overrideWithValue(fake)],
+      );
+      addTearDown(() async {
+        container.dispose();
+        await fake.dispose();
+      });
+      final templateSubscription = container.listen(
+        templateSummariesProvider((archived: false, query: 'bench')),
+        (_, _) {},
+      );
+      final routineSubscription = container.listen(
+        routineSummariesProvider((archived: true, query: 'push')),
+        (_, _) {},
+      );
+      await container.pump();
+
+      expect(fake.templateWatchSubscriptions, 1);
+      expect(fake.routineWatchSubscriptions, 1);
+      templateSubscription.close();
+      routineSubscription.close();
+      await container.pump();
+      await Future<void>.delayed(Duration.zero);
+
+      expect(fake.templateWatchCancellations, 1);
+      expect(fake.routineWatchCancellations, 1);
+    },
+  );
+
   test('fake records copy calls and forwards configured save errors', () async {
     final fake = FakeTrainingRepository()
       ..saveError = StateError('duplicate Template');
@@ -65,6 +98,24 @@ void main() {
       throwsA(isA<StateError>()),
     );
     expect(fake.copiedRoutineTemplateIds, [17]);
+  });
+
+  test('fake records failed Template and Routine save attempts', () async {
+    final fake = FakeTrainingRepository()
+      ..saveError = StateError('Template save failed')
+      ..routineSaveError = StateError('Routine save failed');
+    addTearDown(fake.dispose);
+    final template = WorkoutTemplateDraft(
+      name: 'Chest',
+      prescriptions: const [],
+    );
+    final routine = RoutineDraft(name: 'PPL', templates: const []);
+
+    await expectLater(fake.saveTemplate(template), throwsA(isA<StateError>()));
+    await expectLater(fake.saveRoutine(routine), throwsA(isA<StateError>()));
+
+    expect(fake.savedTemplates, [same(template)]);
+    expect(fake.savedRoutines, [same(routine)]);
   });
 
   testWidgets('Templates is initial tab and plus creates Template', (
@@ -96,6 +147,18 @@ void main() {
 
     expect(find.text('Chest'), findsOneWidget);
     expect(find.text('Legs'), findsNothing);
+  });
+
+  testWidgets('visible close-search action announces Close Search', (
+    tester,
+  ) async {
+    await pumpTraining(tester);
+
+    await tester.tap(find.byTooltip('Search Training'));
+    await tester.pump();
+
+    expect(find.byTooltip('Close Search'), findsOneWidget);
+    expect(find.bySemanticsLabel('Close Search'), findsOneWidget);
   });
 
   testWidgets('initial loading uses keyed skeleton rows', (tester) async {

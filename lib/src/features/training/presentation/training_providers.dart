@@ -13,21 +13,15 @@ final trainingRepositoryProvider = Provider<TrainingRepository>((ref) {
   return DriftTrainingRepository(ref.watch(databaseProvider));
 });
 
-final templateSummariesProvider =
-    StreamProvider.family<List<WorkoutTemplateSummary>, TrainingListQuery>((
-      ref,
-      request,
-    ) {
+final templateSummariesProvider = StreamProvider.autoDispose
+    .family<List<WorkoutTemplateSummary>, TrainingListQuery>((ref, request) {
       return ref
           .watch(trainingRepositoryProvider)
           .watchTemplates(archived: request.archived, query: request.query);
     });
 
-final routineSummariesProvider =
-    StreamProvider.family<List<RoutineSummary>, TrainingListQuery>((
-      ref,
-      request,
-    ) {
+final routineSummariesProvider = StreamProvider.autoDispose
+    .family<List<RoutineSummary>, TrainingListQuery>((ref, request) {
       return ref
           .watch(trainingRepositoryProvider)
           .watchRoutines(archived: request.archived, query: request.query);
