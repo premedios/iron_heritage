@@ -29,6 +29,7 @@ final class _TemplateDetailScreenState extends State<TemplateDetailScreen> {
   bool _loading = true;
   bool _writing = false;
   int _loadGeneration = 0;
+  int _operationGeneration = 0;
 
   bool get _archived => _template?.archivedAt != null;
 
@@ -41,8 +42,19 @@ final class _TemplateDetailScreenState extends State<TemplateDetailScreen> {
   @override
   void didUpdateWidget(covariant TemplateDetailScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.templateId != widget.templateId ||
-        oldWidget.repository != widget.repository) {
+    final loadIdentityChanged =
+        oldWidget.templateId != widget.templateId ||
+        !identical(oldWidget.repository, widget.repository);
+    final operationIdentityChanged =
+        loadIdentityChanged ||
+        !identical(oldWidget.onStartWorkout, widget.onStartWorkout) ||
+        !identical(oldWidget.onEdit, widget.onEdit) ||
+        !identical(oldWidget.onArchived, widget.onArchived);
+    if (operationIdentityChanged) {
+      _operationGeneration++;
+      _writing = false;
+    }
+    if (loadIdentityChanged) {
       _template = null;
       _load();
     }
@@ -114,9 +126,6 @@ final class _TemplateDetailScreenState extends State<TemplateDetailScreen> {
 
   Future<void> _load() async {
     final generation = ++_loadGeneration;
-    if (_writing) {
-      return;
-    }
     setState(() {
       _loading = true;
       _loadError = null;
@@ -146,6 +155,10 @@ final class _TemplateDetailScreenState extends State<TemplateDetailScreen> {
     if (template == null || _writing) {
       return;
     }
+    final generation = ++_operationGeneration;
+    final templateId = widget.templateId;
+    final repository = widget.repository;
+    final onArchived = widget.onArchived;
     final verb = archived ? 'Archive' : 'Restore';
     final confirmed = await showDialog<bool>(
       context: context,
@@ -168,23 +181,50 @@ final class _TemplateDetailScreenState extends State<TemplateDetailScreen> {
         ],
       ),
     );
-    if (confirmed == true && mounted) {
-      await _setArchived(archived);
+    if (confirmed == true &&
+        _isCurrentOperation(
+          generation: generation,
+          templateId: templateId,
+          repository: repository,
+          onArchived: onArchived,
+        )) {
+      await _setArchived(
+        archived: archived,
+        generation: generation,
+        templateId: templateId,
+        repository: repository,
+        template: template,
+        onArchived: onArchived,
+      );
     }
   }
 
-  Future<void> _setArchived(bool archived) async {
-    final template = _template;
-    if (template == null || _writing) {
+  Future<void> _setArchived({
+    required bool archived,
+    required int generation,
+    required int templateId,
+    required TrainingRepository repository,
+    required WorkoutTemplateDraft template,
+    required VoidCallback onArchived,
+  }) async {
+    if (_writing ||
+        !_isCurrentOperation(
+          generation: generation,
+          templateId: templateId,
+          repository: repository,
+          onArchived: onArchived,
+        )) {
       return;
     }
     setState(() => _writing = true);
     try {
-      await widget.repository.setTemplateArchived(
-        widget.templateId,
-        archived: archived,
-      );
-      if (!mounted) {
+      await repository.setTemplateArchived(templateId, archived: archived);
+      if (!_isCurrentOperation(
+        generation: generation,
+        templateId: templateId,
+        repository: repository,
+        onArchived: onArchived,
+      )) {
         return;
       }
       setState(() {
@@ -192,9 +232,17 @@ final class _TemplateDetailScreenState extends State<TemplateDetailScreen> {
         _writing = false;
       });
       if (archived) {
-        widget.onArchived();
+        onArchived();
       }
     } on Object catch (error) {
+      if (!_isCurrentOperation(
+        generation: generation,
+        templateId: templateId,
+        repository: repository,
+        onArchived: onArchived,
+      )) {
+        return;
+      }
       if (!mounted) {
         return;
       }
@@ -207,6 +255,19 @@ final class _TemplateDetailScreenState extends State<TemplateDetailScreen> {
         SnackBar(content: Text('Could not $verb Template: $message')),
       );
     }
+  }
+
+  bool _isCurrentOperation({
+    required int generation,
+    required int templateId,
+    required TrainingRepository repository,
+    required VoidCallback onArchived,
+  }) {
+    return mounted &&
+        generation == _operationGeneration &&
+        templateId == widget.templateId &&
+        identical(repository, widget.repository) &&
+        identical(onArchived, widget.onArchived);
   }
 
   static WorkoutTemplateDraft _withArchivedAt(

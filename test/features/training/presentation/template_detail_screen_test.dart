@@ -357,6 +357,115 @@ void main() {
     expect(find.text('Upper'), findsNothing);
   });
 
+  testWidgets(
+    'identity change while confirmation is open cannot archive new Template',
+    (tester) async {
+      final firstRepository = _DetailRepository(template());
+      final secondRepository = _DetailRepository(
+        template(id: 8, name: 'Lower'),
+      );
+      var templateId = 7;
+      TrainingRepository repository = firstRepository;
+      var firstCallbacks = 0;
+      var secondCallbacks = 0;
+      VoidCallback onArchived = () => firstCallbacks++;
+      StateSetter? refresh;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: StatefulBuilder(
+            builder: (context, setState) {
+              refresh = setState;
+              return TemplateDetailScreen(
+                templateId: templateId,
+                repository: repository,
+                onStartWorkout: () {},
+                onEdit: (_) {},
+                onArchived: onArchived,
+              );
+            },
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.tap(find.byTooltip('More Template actions'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Archive'));
+      await tester.pumpAndSettle();
+
+      templateId = 8;
+      repository = secondRepository;
+      onArchived = () => secondCallbacks++;
+      refresh!(() {});
+      await tester.pump();
+      await tester.pump();
+      await tester.tap(find.widgetWithText(FilledButton, 'Archive'));
+      await tester.pumpAndSettle();
+
+      expect(firstRepository.archiveCalls, isEmpty);
+      expect(secondRepository.archiveCalls, isEmpty);
+      expect(firstCallbacks, 0);
+      expect(secondCallbacks, 0);
+      expect(find.text('Lower'), findsOneWidget);
+      expect(find.text('Upper'), findsNothing);
+    },
+  );
+
+  testWidgets('identity change during write preserves newly loaded detail', (
+    tester,
+  ) async {
+    final firstRepository = _DetailRepository(template())..delayArchive = true;
+    final secondRepository = _DetailRepository(template(id: 8, name: 'Lower'));
+    var templateId = 7;
+    TrainingRepository repository = firstRepository;
+    var firstCallbacks = 0;
+    var secondCallbacks = 0;
+    VoidCallback onArchived = () => firstCallbacks++;
+    StateSetter? refresh;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: StatefulBuilder(
+          builder: (context, setState) {
+            refresh = setState;
+            return TemplateDetailScreen(
+              templateId: templateId,
+              repository: repository,
+              onStartWorkout: () {},
+              onEdit: (_) {},
+              onArchived: onArchived,
+            );
+          },
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.tap(find.byTooltip('More Template actions'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Archive'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Archive'));
+    await tester.pump(const Duration(seconds: 1));
+    expect(firstRepository.archiveCalls, [(id: 7, archived: true)]);
+
+    templateId = 8;
+    repository = secondRepository;
+    onArchived = () => secondCallbacks++;
+    refresh!(() {});
+    await tester.pump();
+    await tester.pump();
+    expect(find.text('Lower'), findsOneWidget);
+    expect(secondRepository.archiveCalls, isEmpty);
+
+    firstRepository.completeArchive();
+    await tester.pumpAndSettle();
+
+    expect(firstRepository.archiveCalls, [(id: 7, archived: true)]);
+    expect(secondRepository.archiveCalls, isEmpty);
+    expect(firstCallbacks, 0);
+    expect(secondCallbacks, 0);
+    expect(find.text('Lower'), findsOneWidget);
+    expect(find.text('Upper'), findsNothing);
+  });
+
   testWidgets('actions and ordered cards expose accessible semantics', (
     tester,
   ) async {
