@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:iron_heritage/src/features/training/data/training_repository.dart';
 import 'package:iron_heritage/src/features/training/domain/training_models.dart';
@@ -113,6 +115,43 @@ void main() {
       expect(controller.draft.prescriptions.single.plannedSets.first.id, 31);
       expect(controller.draft.prescriptions.single.plannedSets.last.id, isNull);
       expect(controller.dirty, isTrue);
+    });
+
+    test('Planned Set updates cannot replace persisted identity', () {
+      final controller = TemplateEditorController(
+        repository: fake,
+        initial: WorkoutTemplateDraft(
+          name: 'Chest',
+          prescriptions: [
+            ExercisePrescriptionDraft(
+              exerciseId: 7,
+              exerciseName: 'Bench Press',
+              plannedSets: const [PlannedSetDraft(id: 31, minReps: 8)],
+            ),
+          ],
+        ),
+      );
+
+      controller.updatePlannedSet(
+        0,
+        0,
+        const PlannedSetDraft(
+          id: 999,
+          weight: 80,
+          minReps: 10,
+          maxReps: 12,
+          rir: 2,
+          type: PlannedSetType.dropset,
+        ),
+      );
+
+      final updated = controller.draft.prescriptions.single.plannedSets.single;
+      expect(updated.id, 31);
+      expect(updated.weight, 80);
+      expect(updated.minReps, 10);
+      expect(updated.maxReps, 12);
+      expect(updated.rir, 2);
+      expect(updated.type, PlannedSetType.dropset);
     });
 
     test('remove and reorder operations update ordered immutable lists', () {
@@ -246,6 +285,53 @@ void main() {
       },
     );
 
+    test('save success cannot mark edits made in flight clean', () async {
+      final delayed = _DelayedTrainingRepository(fake);
+      final controller = TemplateEditorController(
+        repository: delayed,
+        initial: _validTemplate(id: 17),
+      );
+      controller.setName('Submitted');
+
+      final pendingSave = controller.save();
+      expect(controller.saving, isTrue);
+      controller.setName('Edited while saving');
+      delayed.saveResult.complete(17);
+
+      expect(await pendingSave, 17);
+      expect(controller.draft.name, 'Edited while saving');
+      expect(controller.dirty, isTrue);
+      expect(controller.errors, isEmpty);
+      expect(controller.saving, isFalse);
+    });
+
+    test(
+      'save failure cannot apply stale errors over edits in flight',
+      () async {
+        final delayed = _DelayedTrainingRepository(fake);
+        final controller = TemplateEditorController(
+          repository: delayed,
+          initial: _validTemplate(),
+        );
+        controller.setName('Submitted');
+
+        final pendingSave = controller.save();
+        controller.setName('Edited while saving');
+        delayed.saveResult.completeError(
+          const DuplicateTrainingName(
+            'name',
+            'A Template with this name already exists',
+          ),
+        );
+
+        expect(await pendingSave, isNull);
+        expect(controller.draft.name, 'Edited while saving');
+        expect(controller.dirty, isTrue);
+        expect(controller.errors, isEmpty);
+        expect(controller.saving, isFalse);
+      },
+    );
+
     test('failed save retains draft and maps duplicate-name error', () async {
       fake.saveError = const DuplicateTrainingName(
         'name',
@@ -298,6 +384,52 @@ void main() {
       expect(controller.saving, isFalse);
     });
   });
+
+  group('disposal', () {
+    test('add Exercises completion does not mutate after disposal', () async {
+      final delayed = _DelayedTrainingRepository(fake)..delayLatest = true;
+      final initial = WorkoutTemplateDraft(name: '', prescriptions: const []);
+      final controller = TemplateEditorController(
+        repository: delayed,
+        initial: initial,
+      );
+
+      final pendingAdd = controller.addExercises([
+        const ExerciseChoice(id: 7, name: 'Bench Press'),
+      ]);
+      controller.dispose();
+      delayed.latestResult.complete(null);
+
+      await pendingAdd;
+      expect(controller.draft, same(initial));
+      expect(controller.dirty, isFalse);
+    });
+
+    test('save completion does not mutate or notify after disposal', () async {
+      final delayed = _DelayedTrainingRepository(fake);
+      final controller = TemplateEditorController(
+        repository: delayed,
+        initial: _validTemplate(id: 17),
+      );
+      controller.setName('Submitted');
+
+      final pendingSave = controller.save();
+      final stateBeforeDispose = (
+        draft: controller.draft,
+        errors: controller.errors,
+        saving: controller.saving,
+        dirty: controller.dirty,
+      );
+      controller.dispose();
+      delayed.saveResult.complete(17);
+
+      expect(await pendingSave, 17);
+      expect(controller.draft, same(stateBeforeDispose.draft));
+      expect(controller.errors, same(stateBeforeDispose.errors));
+      expect(controller.saving, stateBeforeDispose.saving);
+      expect(controller.dirty, stateBeforeDispose.dirty);
+    });
+  });
 }
 
 WorkoutTemplateDraft _validTemplate({int? id, int? routineId}) {
@@ -314,4 +446,69 @@ WorkoutTemplateDraft _validTemplate({int? id, int? routineId}) {
       ),
     ],
   );
+}
+
+final class _DelayedTrainingRepository implements TrainingRepository {
+  _DelayedTrainingRepository(this.delegate);
+
+  final FakeTrainingRepository delegate;
+  final saveResult = Completer<int>();
+  final latestResult = Completer<ExercisePrescriptionDraft?>();
+  bool delayLatest = false;
+
+  @override
+  Future<int> saveTemplate(WorkoutTemplateDraft draft) => saveResult.future;
+
+  @override
+  Future<ExercisePrescriptionDraft?> latestPrescription(int exerciseId) {
+    return delayLatest
+        ? latestResult.future
+        : delegate.latestPrescription(exerciseId);
+  }
+
+  @override
+  Future<WorkoutTemplateDraft?> loadTemplate(int id) {
+    return delegate.loadTemplate(id);
+  }
+
+  @override
+  Future<RoutineDraft?> loadRoutine(int id) {
+    return delegate.loadRoutine(id);
+  }
+
+  @override
+  Future<int> saveRoutine(RoutineDraft draft) {
+    return delegate.saveRoutine(draft);
+  }
+
+  @override
+  Future<int> saveRoutineTemplateAsStandalone(int templateId) {
+    return delegate.saveRoutineTemplateAsStandalone(templateId);
+  }
+
+  @override
+  Future<void> setRoutineArchived(int id, {required bool archived}) {
+    return delegate.setRoutineArchived(id, archived: archived);
+  }
+
+  @override
+  Future<void> setTemplateArchived(int id, {required bool archived}) {
+    return delegate.setTemplateArchived(id, archived: archived);
+  }
+
+  @override
+  Stream<List<RoutineSummary>> watchRoutines({
+    required bool archived,
+    String query = '',
+  }) {
+    return delegate.watchRoutines(archived: archived, query: query);
+  }
+
+  @override
+  Stream<List<WorkoutTemplateSummary>> watchTemplates({
+    required bool archived,
+    String query = '',
+  }) {
+    return delegate.watchTemplates(archived: archived, query: query);
+  }
 }

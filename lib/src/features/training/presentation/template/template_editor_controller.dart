@@ -20,6 +20,8 @@ final class TemplateEditorController extends ChangeNotifier {
   Map<String, String> _errors = const {};
   bool _saving = false;
   bool _dirty = false;
+  bool _disposed = false;
+  int _revision = 0;
 
   WorkoutTemplateDraft get draft => _draft;
   Map<String, String> get errors => _errors;
@@ -27,13 +29,16 @@ final class TemplateEditorController extends ChangeNotifier {
   bool get dirty => _dirty;
 
   Future<void> addExercises(List<ExerciseChoice> choices) async {
-    if (choices.isEmpty) {
+    if (_disposed || choices.isEmpty) {
       return;
     }
 
     final additions = <ExercisePrescriptionDraft>[];
     for (final choice in choices) {
       final latest = await _repository.latestPrescription(choice.id);
+      if (_disposed) {
+        return;
+      }
       additions.add(
         latest?.deepCopy() ??
             ExercisePrescriptionDraft(
@@ -45,6 +50,12 @@ final class TemplateEditorController extends ChangeNotifier {
     }
 
     _replaceDraft(prescriptions: [..._draft.prescriptions, ...additions]);
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
   }
 
   void setName(String value) {
@@ -91,11 +102,20 @@ final class TemplateEditorController extends ChangeNotifier {
     PlannedSetDraft value,
   ) {
     final current = _draft.prescriptions[prescriptionIndex];
-    if (_samePlannedSet(current.plannedSets[setIndex], value)) {
+    final existing = current.plannedSets[setIndex];
+    final updated = PlannedSetDraft(
+      id: existing.id,
+      weight: value.weight,
+      minReps: value.minReps,
+      maxReps: value.maxReps,
+      rir: value.rir,
+      type: value.type,
+    );
+    if (_samePlannedSet(existing, updated)) {
       return;
     }
     final plannedSets = current.plannedSets.toList();
-    plannedSets[setIndex] = value;
+    plannedSets[setIndex] = updated;
     _replacePrescription(
       prescriptionIndex,
       ExercisePrescriptionDraft(
@@ -177,7 +197,7 @@ final class TemplateEditorController extends ChangeNotifier {
   }
 
   Future<int?> save() async {
-    if (_saving) {
+    if (_disposed || _saving) {
       return null;
     }
 
@@ -185,24 +205,42 @@ final class TemplateEditorController extends ChangeNotifier {
     if (completed == null) {
       return null;
     }
+    final savingRevision = _revision;
 
     _saving = true;
     notifyListeners();
     try {
       final id = await _repository.saveTemplate(completed);
-      _dirty = false;
+      if (_disposed) {
+        return id;
+      }
+      if (_revision == savingRevision) {
+        _dirty = false;
+      }
       return id;
     } on DuplicateTrainingName catch (error) {
-      _errors = Map.unmodifiable({error.field: error.message});
-      _dirty = true;
+      if (_disposed) {
+        return null;
+      }
+      if (_revision == savingRevision) {
+        _errors = Map.unmodifiable({error.field: error.message});
+        _dirty = true;
+      }
       return null;
     } on InvalidTrainingDraft catch (error) {
-      _errors = Map.unmodifiable(error.errors);
-      _dirty = true;
+      if (_disposed) {
+        return null;
+      }
+      if (_revision == savingRevision) {
+        _errors = Map.unmodifiable(error.errors);
+        _dirty = true;
+      }
       return null;
     } finally {
-      _saving = false;
-      notifyListeners();
+      if (!_disposed) {
+        _saving = false;
+        notifyListeners();
+      }
     }
   }
 
@@ -228,6 +266,7 @@ final class TemplateEditorController extends ChangeNotifier {
     );
     _errors = const {};
     _dirty = true;
+    _revision++;
     notifyListeners();
   }
 
