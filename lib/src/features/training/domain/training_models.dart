@@ -27,13 +27,13 @@ final class PlannedSetDraft {
 }
 
 final class ExercisePrescriptionDraft {
-  const ExercisePrescriptionDraft({
+  ExercisePrescriptionDraft({
     this.id,
     required this.exerciseId,
     required this.exerciseName,
     this.notes,
-    required this.plannedSets,
-  });
+    required List<PlannedSetDraft> plannedSets,
+  }) : plannedSets = List<PlannedSetDraft>.unmodifiable(plannedSets);
 
   final int? id;
   final int exerciseId;
@@ -50,13 +50,15 @@ final class ExercisePrescriptionDraft {
 }
 
 final class WorkoutTemplateDraft {
-  const WorkoutTemplateDraft({
+  WorkoutTemplateDraft({
     this.id,
     this.routineId,
     this.archivedAt,
     required this.name,
-    required this.prescriptions,
-  });
+    required List<ExercisePrescriptionDraft> prescriptions,
+  }) : prescriptions = List<ExercisePrescriptionDraft>.unmodifiable(
+         prescriptions,
+       );
 
   final int? id;
   final int? routineId;
@@ -72,12 +74,12 @@ final class WorkoutTemplateDraft {
 }
 
 final class RoutineDraft {
-  const RoutineDraft({
+  RoutineDraft({
     this.id,
     this.archivedAt,
     required this.name,
-    required this.templates,
-  });
+    required List<WorkoutTemplateDraft> templates,
+  }) : templates = List<WorkoutTemplateDraft>.unmodifiable(templates);
 
   final int? id;
   final DateTime? archivedAt;
@@ -93,12 +95,12 @@ final class ExerciseChoice {
 }
 
 final class WorkoutTemplateSummary {
-  const WorkoutTemplateSummary({
+  WorkoutTemplateSummary({
     required this.id,
     required this.name,
-    required this.exerciseNames,
+    required List<String> exerciseNames,
     required this.updatedAt,
-  });
+  }) : exerciseNames = List<String>.unmodifiable(exerciseNames);
 
   final int id;
   final String name;
@@ -107,12 +109,12 @@ final class WorkoutTemplateSummary {
 }
 
 final class RoutineSummary {
-  const RoutineSummary({
+  RoutineSummary({
     required this.id,
     required this.name,
-    required this.templateNames,
+    required List<String> templateNames,
     required this.updatedAt,
-  });
+  }) : templateNames = List<String>.unmodifiable(templateNames);
 
   final int id;
   final String name;
