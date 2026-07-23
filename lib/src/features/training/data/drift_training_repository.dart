@@ -98,9 +98,18 @@ final class DriftTrainingRepository implements TrainingRepository {
     if (structuralErrors.isNotEmpty) {
       throw InvalidTrainingDraft(structuralErrors);
     }
-    await _assertTemplateNameAvailable(draft);
 
     return _db.transaction(() async {
+      final persistedTemplate = draft.id == null
+          ? null
+          : await (_db.select(
+              _db.workoutTemplates,
+            )..where((row) => row.id.equals(draft.id!))).getSingle();
+      final routineId = persistedTemplate == null
+          ? draft.routineId
+          : persistedTemplate.routineId;
+      await _assertTemplateNameAvailable(draft, routineId: routineId);
+
       final timestamp = _now();
       final templateId = draft.id == null
           ? await _db
@@ -108,7 +117,7 @@ final class DriftTrainingRepository implements TrainingRepository {
                 .insert(
                   WorkoutTemplatesCompanion.insert(
                     name: draft.name.trim(),
-                    routineId: Value(draft.routineId),
+                    routineId: Value(routineId),
                     position: const Value.absent(),
                     createdAt: Value(timestamp),
                     updatedAt: Value(timestamp),
@@ -174,6 +183,7 @@ final class DriftTrainingRepository implements TrainingRepository {
           name: template.name,
           prescriptions: const [],
         ),
+        routineId: template.routineId,
       );
     }
 
@@ -188,8 +198,11 @@ final class DriftTrainingRepository implements TrainingRepository {
     );
   }
 
-  Future<void> _assertTemplateNameAvailable(WorkoutTemplateDraft draft) async {
-    if (draft.routineId != null) {
+  Future<void> _assertTemplateNameAvailable(
+    WorkoutTemplateDraft draft, {
+    required int? routineId,
+  }) async {
+    if (routineId != null) {
       return;
     }
     final normalizedName = TrainingValidation.normalizeName(draft.name);

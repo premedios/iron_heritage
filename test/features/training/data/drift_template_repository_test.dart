@@ -161,6 +161,78 @@ void main() {
     },
   );
 
+  test(
+    'serializes concurrent standalone save and rename name checks',
+    () async {
+      final exerciseId = await addExercise('Bench Press');
+      final existingId = await repo.saveTemplate(
+        template(name: 'Original', exerciseId: exerciseId),
+      );
+
+      Future<Object> capture(Future<int> operation) async {
+        try {
+          return await operation;
+        } on DuplicateTrainingName catch (error) {
+          return error;
+        }
+      }
+
+      final outcomes = await Future.wait([
+        capture(
+          repo.saveTemplate(template(name: 'Shared', exerciseId: exerciseId)),
+        ),
+        capture(
+          repo.saveTemplate(
+            template(id: existingId, name: ' shared ', exerciseId: exerciseId),
+          ),
+        ),
+      ]);
+
+      expect(outcomes.whereType<int>(), hasLength(1));
+      expect(outcomes.whereType<DuplicateTrainingName>(), hasLength(1));
+      final templates = await db.select(db.workoutTemplates).get();
+      expect(
+        templates
+            .where((row) => row.name.trim().toLowerCase() == 'shared')
+            .length,
+        1,
+      );
+    },
+  );
+
+  test(
+    'uses persisted ownership when updating a standalone Template',
+    () async {
+      final exerciseId = await addExercise('Bench Press');
+      await repo.saveTemplate(template(name: 'Chest', exerciseId: exerciseId));
+      final editableId = await repo.saveTemplate(
+        template(name: 'Original', exerciseId: exerciseId),
+      );
+      final routineId = await db
+          .into(db.routines)
+          .insert(RoutinesCompanion.insert(name: 'Push'));
+
+      await expectLater(
+        repo.saveTemplate(
+          WorkoutTemplateDraft(
+            id: editableId,
+            routineId: routineId,
+            name: ' CHEST ',
+            prescriptions: [
+              ExercisePrescriptionDraft(
+                exerciseId: exerciseId,
+                exerciseName: 'Bench Press',
+                plannedSets: const [PlannedSetDraft()],
+              ),
+            ],
+          ),
+        ),
+        throwsA(isA<DuplicateTrainingName>()),
+      );
+      expect((await repo.loadTemplate(editableId))?.name, 'Original');
+    },
+  );
+
   test('sorts standalone Template summaries by updatedAt descending', () async {
     final exerciseId = await addExercise('Bench Press');
     final olderId = await repo.saveTemplate(
