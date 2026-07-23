@@ -134,16 +134,20 @@ void main() {
     expect(navigations, 1);
   });
 
-  testWidgets('archived detail confirms Restore and refreshes active actions', (
+  testWidgets('archived detail keeps Edit and confirms Restore', (
     tester,
   ) async {
+    WorkoutTemplateDraft? edited;
     final repository = await _pumpDetail(
       tester,
       value: template(archived: true),
+      onEdit: (value) => edited = value,
     );
 
     expect(find.text('Start Workout'), findsNothing);
-    expect(find.byTooltip('Edit Template'), findsNothing);
+    expect(find.byTooltip('Edit Template'), findsOneWidget);
+    await tester.tap(find.byTooltip('Edit Template'));
+    expect(edited?.id, 7);
     await tester.tap(find.byTooltip('More Template actions'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Restore'));
@@ -250,6 +254,17 @@ void main() {
 
     expect(repository.loadCalls, 2);
     expect(find.text('Bench Press'), findsOneWidget);
+  });
+
+  testWidgets('pending local load uses a spinner-free detail skeleton', (
+    tester,
+  ) async {
+    final repository = _DetailRepository(template())..delayLoad = true;
+    await _pumpDetail(tester, repository: repository);
+
+    expect(find.byKey(const Key('template-detail-skeleton')), findsOneWidget);
+    expect(find.bySemanticsLabel('Loading Template'), findsOneWidget);
+    expect(find.byType(CircularProgressIndicator), findsNothing);
   });
 
   testWidgets(

@@ -55,7 +55,7 @@ final class _TemplateDetailScreenState extends State<TemplateDetailScreen> {
       appBar: AppBar(
         title: Text(template?.name ?? 'Template'),
         actions: [
-          if (template != null && !_archived)
+          if (template != null)
             SizedBox.square(
               dimension: 48,
               child: Semantics(
@@ -97,12 +97,7 @@ final class _TemplateDetailScreenState extends State<TemplateDetailScreen> {
         ],
       ),
       body: switch ((template, _loadError, _loading)) {
-        (null, _, true) => Center(
-          child: Semantics(
-            label: 'Loading Template',
-            child: const CircularProgressIndicator(),
-          ),
-        ),
+        (null, _, true) => const _TemplateDetailSkeleton(),
         (null, final error?, false) => _LoadError(error: error, onRetry: _load),
         (null, null, false) => _LoadError(
           error: 'Template not found',
@@ -252,6 +247,62 @@ final class _LoadError extends StatelessWidget {
             FilledButton(onPressed: onRetry, child: const Text('Retry')),
           ],
         ),
+      ),
+    );
+  }
+}
+
+final class _TemplateDetailSkeleton extends StatelessWidget {
+  const _TemplateDetailSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    final color = Theme.of(context).colorScheme.surfaceContainerHighest;
+    return Semantics(
+      key: const Key('template-detail-skeleton'),
+      container: true,
+      label: 'Loading Template',
+      excludeSemantics: true,
+      child: ListView.builder(
+        padding: const EdgeInsets.all(12),
+        itemCount: 2,
+        itemBuilder: (context, index) => Card(
+          margin: const EdgeInsets.only(bottom: 12),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _SkeletonBar(width: 152, color: color),
+                const SizedBox(height: 16),
+                _SkeletonBar(width: 88, color: color),
+                const SizedBox(height: 10),
+                _SkeletonBar(width: double.infinity, color: color),
+                const SizedBox(height: 8),
+                _SkeletonBar(width: 220, color: color),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+final class _SkeletonBar extends StatelessWidget {
+  const _SkeletonBar({required this.width, required this.color});
+
+  final double width;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: width,
+      height: 16,
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(8),
       ),
     );
   }
