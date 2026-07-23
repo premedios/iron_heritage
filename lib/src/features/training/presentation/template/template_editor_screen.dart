@@ -40,6 +40,8 @@ final class _TemplateEditorScreenState extends State<TemplateEditorScreen> {
   bool _allowPop = false;
   String? _announcement;
 
+  bool get _busy => _controller.saving || _controller.adding;
+
   @override
   void initState() {
     super.initState();
@@ -65,9 +67,9 @@ final class _TemplateEditorScreenState extends State<TemplateEditorScreen> {
   Widget build(BuildContext context) {
     final draft = _controller.draft;
     return PopScope<Object?>(
-      canPop: !_controller.saving && (_allowPop || !_controller.dirty),
+      canPop: !_busy && (_allowPop || !_controller.dirty),
       onPopInvokedWithResult: (didPop, _) {
-        if (!didPop && !_controller.saving) {
+        if (!didPop && !_busy) {
           _confirmDiscard();
         }
       },
@@ -76,21 +78,23 @@ final class _TemplateEditorScreenState extends State<TemplateEditorScreen> {
           title: Text(draft.id == null ? 'New Template' : 'Edit Template'),
           actions: [
             TextButton(
-              onPressed: _controller.saving ? null : _save,
+              onPressed: _busy ? null : _save,
               child: const Text('Save'),
             ),
           ],
-          bottom: _controller.saving
-              ? const PreferredSize(
-                  preferredSize: Size.fromHeight(3),
+          bottom: _busy
+              ? PreferredSize(
+                  preferredSize: const Size.fromHeight(3),
                   child: LinearProgressIndicator(
-                    semanticsLabel: 'Saving Template',
+                    semanticsLabel: _controller.adding
+                        ? 'Adding exercises'
+                        : 'Saving Template',
                   ),
                 )
               : null,
         ),
         body: AbsorbPointer(
-          absorbing: _controller.saving,
+          absorbing: _busy,
           child: ListView(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
             children: [
@@ -104,14 +108,14 @@ final class _TemplateEditorScreenState extends State<TemplateEditorScreen> {
               TextFormField(
                 controller: _nameController,
                 focusNode: _nameFocusNode,
-                enabled: !_controller.saving,
+                enabled: !_busy,
                 decoration: InputDecoration(
                   labelText: 'Template name',
                   errorText: _controller.errors['name'],
                 ),
                 textInputAction: TextInputAction.next,
                 onChanged: (value) {
-                  if (!_controller.saving) {
+                  if (!_busy) {
                     _controller.setName(value);
                   }
                 },
@@ -140,10 +144,10 @@ final class _TemplateEditorScreenState extends State<TemplateEditorScreen> {
                     targetRaw: _setTargetRaw,
                     setError:
                         _controller.errors['prescriptions.$index.plannedSets'],
-                    mutationsEnabled: !_controller.saving,
+                    mutationsEnabled: !_busy,
                     onNotesChanged: (value) => _setNotes(index, value),
                     onRemove: () {
-                      if (_controller.saving) {
+                      if (_busy) {
                         return;
                       }
                       for (final token
@@ -155,14 +159,14 @@ final class _TemplateEditorScreenState extends State<TemplateEditorScreen> {
                       _synchronizeTokens();
                     },
                     onAddSet: () {
-                      if (_controller.saving) {
+                      if (_busy) {
                         return;
                       }
                       _controller.addPlannedSet(index);
                       _synchronizeTokens();
                     },
                     onRemoveSet: (setIndex) {
-                      if (_controller.saving) {
+                      if (_busy) {
                         return;
                       }
                       _setTargetErrors.remove(
@@ -176,7 +180,7 @@ final class _TemplateEditorScreenState extends State<TemplateEditorScreen> {
                       _synchronizeTokens();
                     },
                     onUpdateSet: (setIndex, value) {
-                      if (!_controller.saving) {
+                      if (!_busy) {
                         _controller.updatePlannedSet(index, setIndex, value);
                       }
                     },
@@ -187,7 +191,7 @@ final class _TemplateEditorScreenState extends State<TemplateEditorScreen> {
                       key: ValueKey('exercise-drag-${prescription.exerciseId}'),
                       index: index,
                       label: prescription.exerciseName,
-                      enabled: !_controller.saving,
+                      enabled: !_busy,
                       onMoveUp: index == 0
                           ? null
                           : () => _reorderExercises(index, index - 1),
@@ -200,7 +204,7 @@ final class _TemplateEditorScreenState extends State<TemplateEditorScreen> {
               ),
               const SizedBox(height: 8),
               OutlinedButton.icon(
-                onPressed: _controller.saving ? null : _addExercises,
+                onPressed: _busy ? null : _addExercises,
                 icon: const Icon(Icons.add),
                 label: const Text('Add exercise'),
               ),
@@ -236,7 +240,7 @@ final class _TemplateEditorScreenState extends State<TemplateEditorScreen> {
   }
 
   void _reorderExercises(int oldIndex, int newIndex) {
-    if (_controller.saving) {
+    if (_busy) {
       return;
     }
     final controllerIndex = newIndex > oldIndex ? newIndex + 1 : newIndex;
@@ -244,7 +248,7 @@ final class _TemplateEditorScreenState extends State<TemplateEditorScreen> {
   }
 
   void _reorderSets(int prescriptionIndex, int oldIndex, int newIndex) {
-    if (_controller.saving) {
+    if (_busy) {
       return;
     }
     final prescription = _controller.draft.prescriptions[prescriptionIndex];
@@ -262,7 +266,7 @@ final class _TemplateEditorScreenState extends State<TemplateEditorScreen> {
   }
 
   Future<void> _addExercises() async {
-    if (_controller.saving) {
+    if (_busy) {
       return;
     }
     final existingIds = _controller.draft.prescriptions
@@ -273,16 +277,25 @@ final class _TemplateEditorScreenState extends State<TemplateEditorScreen> {
         builder: (_) => ExercisePickerScreen(initiallySelectedIds: existingIds),
       ),
     );
-    if (!mounted || choices == null || _controller.saving) {
+    if (!mounted || choices == null || _busy) {
       return;
     }
-    await _controller.addExercises(
-      choices.where((choice) => !existingIds.contains(choice.id)).toList(),
-    );
-    _synchronizeTokens();
+    try {
+      await _controller.addExercises(
+        choices.where((choice) => !existingIds.contains(choice.id)).toList(),
+      );
+      _synchronizeTokens();
+    } catch (error) {
+      if (mounted) {
+        setState(() => _announcement = 'Could not add exercises: $error');
+      }
+    }
   }
 
   Future<void> _save() async {
+    if (_busy) {
+      return;
+    }
     setState(() => _announcement = null);
     if (_setTargetErrors.isNotEmpty) {
       setState(() => _announcement = 'Fix invalid Planned Set targets');
@@ -349,7 +362,7 @@ final class _TemplateEditorScreenState extends State<TemplateEditorScreen> {
   }
 
   void _setNotes(int index, String value) {
-    if (!_controller.saving) {
+    if (!_busy) {
       _controller.setNotes(index, value);
     }
   }

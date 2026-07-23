@@ -19,6 +19,7 @@ final class TemplateEditorController extends ChangeNotifier {
   WorkoutTemplateDraft _draft;
   Map<String, String> _errors = const {};
   bool _saving = false;
+  bool _adding = false;
   bool _dirty = false;
   bool _disposed = false;
   int _revision = 0;
@@ -26,30 +27,40 @@ final class TemplateEditorController extends ChangeNotifier {
   WorkoutTemplateDraft get draft => _draft;
   Map<String, String> get errors => _errors;
   bool get saving => _saving;
+  bool get adding => _adding;
   bool get dirty => _dirty;
 
   Future<void> addExercises(List<ExerciseChoice> choices) async {
-    if (_disposed || choices.isEmpty) {
+    if (_disposed || _saving || _adding || choices.isEmpty) {
       return;
     }
 
-    final additions = <ExercisePrescriptionDraft>[];
-    for (final choice in choices) {
-      final latest = await _repository.latestPrescription(choice.id);
-      if (_disposed) {
-        return;
+    _adding = true;
+    notifyListeners();
+    try {
+      final additions = <ExercisePrescriptionDraft>[];
+      for (final choice in choices) {
+        final latest = await _repository.latestPrescription(choice.id);
+        if (_disposed) {
+          return;
+        }
+        additions.add(
+          latest?.deepCopy() ??
+              ExercisePrescriptionDraft(
+                exerciseId: choice.id,
+                exerciseName: choice.name,
+                plannedSets: const [PlannedSetDraft()],
+              ),
+        );
       }
-      additions.add(
-        latest?.deepCopy() ??
-            ExercisePrescriptionDraft(
-              exerciseId: choice.id,
-              exerciseName: choice.name,
-              plannedSets: const [PlannedSetDraft()],
-            ),
-      );
-    }
 
-    _replaceDraft(prescriptions: [..._draft.prescriptions, ...additions]);
+      _replaceDraft(prescriptions: [..._draft.prescriptions, ...additions]);
+    } finally {
+      if (!_disposed) {
+        _adding = false;
+        notifyListeners();
+      }
+    }
   }
 
   @override
@@ -197,7 +208,7 @@ final class TemplateEditorController extends ChangeNotifier {
   }
 
   Future<int?> save() async {
-    if (_disposed || _saving) {
+    if (_disposed || _saving || _adding) {
       return null;
     }
 

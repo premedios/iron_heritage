@@ -1,7 +1,10 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:iron_heritage/src/core/database/database.dart';
+import 'package:iron_heritage/src/features/exercise/presentation/exercise_list_screen.dart';
 import 'package:iron_heritage/src/features/training/data/training_repository.dart';
 import 'package:iron_heritage/src/features/training/domain/training_models.dart';
 import 'package:iron_heritage/src/features/training/presentation/template/template_editor_screen.dart';
@@ -253,7 +256,7 @@ void main() {
       'Changed',
     );
     await tester.pump();
-    await tester.tap(find.byTooltip('Back'));
+    await tester.tap(find.byTooltip('Back').hitTestable());
     await tester.pumpAndSettle();
 
     expect(find.text('Discard changes?'), findsOneWidget);
@@ -438,6 +441,105 @@ void main() {
     },
   );
 
+  testWidgets('delayed Exercise prefill serializes Save and back navigation', (
+    tester,
+  ) async {
+    final repository = _DelayedSaveRepository(delayLatest: true);
+    addTearDown(repository.dispose);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          exercisesProvider.overrideWith(
+            (_) => Stream.value(const [
+              Exercise(
+                id: 7,
+                name: 'Bench Press',
+                category: 'Chest',
+                equipment: ['Barbell'],
+                mechanic: 'Compound',
+              ),
+            ]),
+          ),
+        ],
+        child: MaterialApp(
+          home: Builder(
+            builder: (context) => Scaffold(
+              body: FilledButton(
+                onPressed: () => Navigator.push<void>(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => TemplateEditorScreen.persisted(
+                      initial: draft(
+                        prescriptions: [
+                          ExercisePrescriptionDraft(
+                            exerciseId: 9,
+                            exerciseName: 'Cable Fly',
+                            plannedSets: const [PlannedSetDraft()],
+                          ),
+                        ],
+                      ),
+                      repository: repository,
+                      onSaved: (_) {},
+                    ),
+                  ),
+                ),
+                child: const Text('Open editor'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('Open editor'));
+    await tester.pumpAndSettle();
+    final staleSave = tester
+        .widget<TextButton>(find.widgetWithText(TextButton, 'Save'))
+        .onPressed!;
+    final addExercise = find.widgetWithText(OutlinedButton, 'Add exercise');
+    await tester.ensureVisible(addExercise);
+    await tester.tap(addExercise);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Bench Press'));
+    await tester.pump();
+    await tester.tap(find.text('Add 1 exercise'));
+    await tester.pump(const Duration(seconds: 1));
+
+    expect(
+      tester
+          .widget<TextButton>(find.widgetWithText(TextButton, 'Save'))
+          .onPressed,
+      isNull,
+    );
+    staleSave();
+    await tester.pump();
+    expect(repository.savedDrafts, isEmpty);
+    await tester.binding.handlePopRoute();
+    await tester.pump();
+    expect(find.text('New Template'), findsOneWidget);
+    expect(find.text('Discard changes?'), findsNothing);
+
+    repository.completeLatest(null);
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<TextButton>(find.widgetWithText(TextButton, 'Save'))
+          .onPressed,
+      isNotNull,
+    );
+    await tester.tap(find.text('Save'));
+    await tester.pump();
+
+    expect(repository.savedDrafts, hasLength(1));
+    expect(
+      repository.savedDrafts.single.prescriptions.map(
+        (prescription) => prescription.exerciseName,
+      ),
+      ['Cable Fly', 'Bench Press'],
+    );
+    repository.completeFirstSave(42);
+    await tester.pumpAndSettle();
+  });
+
   testWidgets('invalid load and reps stay visible and prevent persistence', (
     tester,
   ) async {
@@ -516,11 +618,17 @@ void main() {
 }
 
 final class _DelayedSaveRepository implements TrainingRepository {
+  _DelayedSaveRepository({this.delayLatest = false});
+
   final delegate = FakeTrainingRepository();
   final firstSave = Completer<int>();
+  final latest = Completer<ExercisePrescriptionDraft?>();
   final savedDrafts = <WorkoutTemplateDraft>[];
+  final bool delayLatest;
 
   void completeFirstSave(int id) => firstSave.complete(id);
+  void completeLatest(ExercisePrescriptionDraft? value) =>
+      latest.complete(value);
 
   Future<void> dispose() => delegate.dispose();
 
@@ -534,7 +642,7 @@ final class _DelayedSaveRepository implements TrainingRepository {
 
   @override
   Future<ExercisePrescriptionDraft?> latestPrescription(int exerciseId) =>
-      delegate.latestPrescription(exerciseId);
+      delayLatest ? latest.future : delegate.latestPrescription(exerciseId);
 
   @override
   Future<WorkoutTemplateDraft?> loadTemplate(int id) =>
