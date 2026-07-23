@@ -33,8 +33,7 @@ class App extends ConsumerWidget {
               return const SyncScreen();
             }
           },
-          loading: () =>
-              const Scaffold(body: Center(child: CircularProgressIndicator())),
+          loading: () => const _AppLoadingSkeleton(),
           error: (err, stack) =>
               Scaffold(body: Center(child: Text('Error: $err'))),
         ),
@@ -57,4 +56,38 @@ class App extends ConsumerWidget {
           child: child,
         )
       : Container(child: child);
+}
+
+final class _AppLoadingSkeleton extends StatelessWidget {
+  const _AppLoadingSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    final color = Theme.of(context).colorScheme.surfaceContainerHighest;
+    return Scaffold(
+      body: Semantics(
+        container: true,
+        liveRegion: true,
+        label: 'Loading Iron Heritage',
+        child: ExcludeSemantics(
+          child: Center(
+            child: SizedBox(
+              key: const Key('app-loading-skeleton'),
+              width: 240,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(width: 180, height: 28, color: color),
+                  const SizedBox(height: 20),
+                  Container(width: 240, height: 16, color: color),
+                  const SizedBox(height: 10),
+                  Container(width: 200, height: 16, color: color),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }

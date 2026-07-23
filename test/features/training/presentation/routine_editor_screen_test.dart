@@ -12,6 +12,20 @@ import 'package:iron_heritage/src/features/training/presentation/routine/routine
 import '../../../support/fake_training_repository.dart';
 
 void main() {
+  testWidgets('Template picker wait uses a semantic skeleton, not a spinner', (
+    tester,
+  ) async {
+    final fake = await _pumpEditor(tester);
+    fake.templateWatchPending = true;
+
+    await tester.tap(find.text('Add template'));
+    await tester.pump();
+
+    expect(find.bySemanticsLabel('Loading Templates'), findsOneWidget);
+    expect(find.byKey(const Key('template-picker-skeleton-0')), findsOneWidget);
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+  });
+
   testWidgets('Add template opens standalone Template picker sheet', (
     tester,
   ) async {
@@ -151,8 +165,24 @@ void main() {
     await tester.pump();
     await tester.tap(find.text('Add 1 template'));
     await tester.tap(find.text('Add 1 template'));
+    await tester.pump();
 
     expect(repository.loadCalls, [11]);
+    expect(
+      find.byWidgetPredicate(
+        (widget) => widget is Semantics && widget.properties.liveRegion == true,
+      ),
+      findsOneWidget,
+    );
+    expect(find.byType(LinearProgressIndicator), findsOneWidget);
+    expect(
+      tester
+          .widget<LinearProgressIndicator>(find.byType(LinearProgressIndicator))
+          .semanticsLabel,
+      'Loading selected Templates',
+    );
+    expect(find.text('Adding selected Templates'), findsOneWidget);
+    expect(find.byType(CircularProgressIndicator), findsNothing);
 
     repository.completeDelayed(chest);
     await tester.pumpAndSettle();

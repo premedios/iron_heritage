@@ -72,6 +72,31 @@ Future<void> pumpPicker(
 }
 
 void main() {
+  testWidgets('initial catalog wait uses a semantic skeleton, not a spinner', (
+    tester,
+  ) async {
+    final catalog = StreamController<List<Exercise>>();
+    addTearDown(catalog.close);
+
+    await pumpPicker(tester, provider: (_) => catalog.stream);
+
+    expect(find.byKey(const Key('exercise-picker-skeleton-0')), findsOneWidget);
+    expect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is Semantics &&
+            widget.properties.label == 'Loading exercises' &&
+            widget.properties.liveRegion == true,
+      ),
+      findsOneWidget,
+    );
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+
+    catalog.add(exercises);
+    await tester.pump();
+    expect(find.text('Bench Press'), findsOneWidget);
+  });
+
   testWidgets('search matches Exercise name', (tester) async {
     await pumpPicker(tester, provider: (_) => Stream.value(exercises));
 

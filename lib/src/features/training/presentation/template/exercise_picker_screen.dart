@@ -70,7 +70,7 @@ final class _ExercisePickerScreenState
           Expanded(
             child: catalog.when(
               data: _buildCatalog,
-              loading: () => const Center(child: CircularProgressIndicator()),
+              loading: () => const _ExerciseCatalogSkeleton(),
               error: (error, _) => _CatalogError(
                 error: error,
                 onRetry: () => ref.invalidate(exercisesProvider),
@@ -209,6 +209,43 @@ final class _ExercisePickerScreenState
       ..sort(
         (left, right) => left.toLowerCase().compareTo(right.toLowerCase()),
       );
+  }
+}
+
+final class _ExerciseCatalogSkeleton extends StatelessWidget {
+  const _ExerciseCatalogSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    final color = Theme.of(context).colorScheme.surfaceContainerHighest;
+    return Semantics(
+      container: true,
+      liveRegion: true,
+      label: 'Loading exercises',
+      child: ExcludeSemantics(
+        child: ListView.builder(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          itemCount: 4,
+          itemBuilder: (context, index) => Card(
+            key: Key('exercise-picker-skeleton-$index'),
+            child: SizedBox(
+              height: 72,
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(width: 160, height: 16, color: color),
+                    const SizedBox(height: 10),
+                    Container(width: 220, height: 12, color: color),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 

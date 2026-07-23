@@ -26,12 +26,20 @@ class AppDatabase extends _$AppDatabase {
     onCreate: (m) => m.createAll(),
     onUpgrade: (m, from, to) async {
       if (from < 2) {
-        await m.addColumn(exercises, exercises.mechanic);
-        await m.addColumn(exercises, exercises.force);
-        await m.addColumn(exercises, exercises.movementPattern);
-        await m.addColumn(workoutSets, workoutSets.isSkipped);
-        await delete(workoutSets).go();
-        await delete(exercises).go();
+        final exerciseColumns = await _columnNames('exercises');
+        if (!exerciseColumns.contains('mechanic')) {
+          await m.addColumn(exercises, exercises.mechanic);
+        }
+        if (!exerciseColumns.contains('force')) {
+          await m.addColumn(exercises, exercises.force);
+        }
+        if (!exerciseColumns.contains('movement_pattern')) {
+          await m.addColumn(exercises, exercises.movementPattern);
+        }
+        final workoutSetColumns = await _columnNames('workout_sets');
+        if (!workoutSetColumns.contains('is_skipped')) {
+          await m.addColumn(workoutSets, workoutSets.isSkipped);
+        }
       }
       if (from < 3) {
         await customStatement('''
@@ -58,6 +66,11 @@ class AppDatabase extends _$AppDatabase {
       await customStatement('PRAGMA foreign_keys = ON');
     },
   );
+
+  Future<Set<String>> _columnNames(String tableName) async {
+    final rows = await customSelect('PRAGMA table_info("$tableName")').get();
+    return {for (final row in rows) row.read<String>('name')};
+  }
 
   static QueryExecutor _openConnection() {
     return driftDatabase(name: 'iron_heritage_db');

@@ -18,6 +18,47 @@ void main() {
   });
 
   test(
+    'v1 upgrade adds absent legacy columns and preserves populated rows',
+    () async {
+      await db.close();
+      db = createV1TestDatabase(addedColumnsPresent: false);
+
+      final exercise = await db.select(db.exercises).getSingle();
+      final set = await db.select(db.workoutSets).getSingle();
+
+      expect(exercise.id, 17);
+      expect(exercise.name, 'Bench Press');
+      expect(exercise.mechanic, isNull);
+      expect(exercise.force, isNull);
+      expect(exercise.movementPattern, isNull);
+      expect(set.id, 19);
+      expect(set.isSkipped, isFalse);
+      expect((await db.select(db.routines).getSingle()).updatedAt, isNotNull);
+      expect(await db.select(db.workoutTemplates).get(), isEmpty);
+    },
+  );
+
+  test(
+    'v1 upgrade tolerates already-added columns and preserves their data',
+    () async {
+      await db.close();
+      db = createV1TestDatabase(addedColumnsPresent: true);
+
+      final exercise = await db.select(db.exercises).getSingle();
+      final set = await db.select(db.workoutSets).getSingle();
+
+      expect(exercise.id, 17);
+      expect(exercise.mechanic, 'Compound');
+      expect(exercise.force, 'Push');
+      expect(exercise.movementPattern, 'Horizontal');
+      expect(set.id, 19);
+      expect(set.isSkipped, isTrue);
+      expect((await db.select(db.routines).getSingle()).updatedAt, isNotNull);
+      expect(await db.select(db.workoutTemplates).get(), isEmpty);
+    },
+  );
+
+  test(
     'v2 upgrade preserves populated routines and creates Training tables',
     () async {
       await db.close();
