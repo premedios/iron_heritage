@@ -447,10 +447,11 @@ final class _OwnedTemplateDetailRouteState
     extends State<_OwnedTemplateDetailRoute> {
   late WorkoutTemplateDraft _template;
   bool _copying = false;
+  bool _refreshing = false;
   String? _copyError;
   String? _refreshError;
-  int _detailRevision = 0;
   int _operationGeneration = 0;
+  int _refreshGeneration = 0;
   bool _dismissScheduled = false;
   MaterialPageRoute<void>? _editorRoute;
 
@@ -479,9 +480,10 @@ final class _OwnedTemplateDetailRouteState
       _operationGeneration++;
       _template = widget.initial;
       _copying = false;
+      _refreshing = false;
       _copyError = null;
       _refreshError = null;
-      _detailRevision++;
+      _refreshGeneration++;
     }
   }
 
@@ -489,9 +491,11 @@ final class _OwnedTemplateDetailRouteState
   Widget build(BuildContext context) {
     return Scaffold(
       body: TemplateDetailScreen(
-        key: ValueKey((_templateId, _detailRevision)),
         templateId: _templateId,
         repository: widget.repository,
+        initialTemplate: _template,
+        actionsEnabled:
+            !_refreshing && _refreshError == null && widget.parentCurrent(),
         onStartWorkout: _startWorkout,
         onEdit: _editTemplate,
         onArchived: _refreshTemplate,
@@ -535,7 +539,9 @@ final class _OwnedTemplateDetailRouteState
             SizedBox(
               height: 48,
               child: OutlinedButton.icon(
-                onPressed: _copying ? null : _saveCopy,
+                onPressed: _copying || _refreshing || _refreshError != null
+                    ? null
+                    : _saveCopy,
                 icon: const Icon(Icons.copy_outlined),
                 label: const Text('Save copy to Templates'),
               ),
@@ -547,7 +553,10 @@ final class _OwnedTemplateDetailRouteState
   }
 
   Future<void> _editTemplate(WorkoutTemplateDraft template) async {
-    if (_copying || !widget.parentCurrent()) {
+    if (_copying ||
+        _refreshing ||
+        _refreshError != null ||
+        !widget.parentCurrent()) {
       return;
     }
     _template = template;
@@ -579,44 +588,74 @@ final class _OwnedTemplateDetailRouteState
   }
 
   Future<void> _refreshTemplate() async {
-    if (!widget.parentCurrent()) {
+    if (_refreshing || !widget.parentCurrent()) {
       return;
     }
+    final refreshGeneration = ++_refreshGeneration;
     final generation = _operationGeneration;
     final templateId = _templateId;
     final repository = widget.repository;
-    if (mounted) {
-      setState(() => _refreshError = null);
-    }
+    setState(() {
+      _refreshing = true;
+      _refreshError = null;
+    });
     try {
       final loaded = await repository.loadTemplate(templateId);
-      if (loaded == null ||
-          !_isCurrent(
-            generation: generation,
-            templateId: templateId,
-            repository: repository,
-          )) {
-        return;
-      }
-      setState(() {
-        _template = loaded;
-        _refreshError = null;
-        _detailRevision++;
-      });
-    } on Object catch (error) {
-      if (!_isCurrent(
+      if (!_isCurrentRefresh(
+        refreshGeneration: refreshGeneration,
         generation: generation,
         templateId: templateId,
         repository: repository,
       )) {
         return;
       }
-      setState(() => _refreshError = 'Could not refresh Template: $error');
+      if (loaded == null) {
+        setState(() {
+          _refreshing = false;
+          _refreshError = 'Could not refresh Template: Template not found';
+        });
+        return;
+      }
+      setState(() {
+        _template = loaded;
+        _refreshing = false;
+        _refreshError = null;
+      });
+    } on Object catch (error) {
+      if (!_isCurrentRefresh(
+        refreshGeneration: refreshGeneration,
+        generation: generation,
+        templateId: templateId,
+        repository: repository,
+      )) {
+        return;
+      }
+      setState(() {
+        _refreshing = false;
+        _refreshError = 'Could not refresh Template: $error';
+      });
     }
   }
 
+  bool _isCurrentRefresh({
+    required int refreshGeneration,
+    required int generation,
+    required int templateId,
+    required TrainingRepository repository,
+  }) {
+    return refreshGeneration == _refreshGeneration &&
+        _isCurrent(
+          generation: generation,
+          templateId: templateId,
+          repository: repository,
+        );
+  }
+
   Future<void> _saveCopy() async {
-    if (_copying || !widget.parentCurrent()) {
+    if (_copying ||
+        _refreshing ||
+        _refreshError != null ||
+        !widget.parentCurrent()) {
       return;
     }
     final generation = _operationGeneration;
@@ -673,13 +712,14 @@ final class _OwnedTemplateDetailRouteState
   }
 
   void _startWorkout() {
-    if (widget.parentCurrent()) {
+    if (!_refreshing && _refreshError == null && widget.parentCurrent()) {
       widget.onStartWorkout(_templateId);
     }
   }
 
   void _parentIdentityChanged() {
     _operationGeneration++;
+    _refreshGeneration++;
     if (_dismissScheduled || !mounted) {
       return;
     }
@@ -748,25 +788,25 @@ final class _InlineRefreshError extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Semantics(
-      container: true,
-      liveRegion: true,
-      label: message,
-      excludeSemantics: true,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-        child: Row(
-          children: [
-            Expanded(
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+      child: Row(
+        children: [
+          Expanded(
+            child: Semantics(
+              container: true,
+              liveRegion: true,
+              label: message,
+              excludeSemantics: true,
               child: Text(
                 message,
                 style: TextStyle(color: Theme.of(context).colorScheme.error),
               ),
             ),
-            const SizedBox(width: 8),
-            OutlinedButton(onPressed: onRetry, child: Text(retryLabel)),
-          ],
-        ),
+          ),
+          const SizedBox(width: 8),
+          OutlinedButton(onPressed: onRetry, child: Text(retryLabel)),
+        ],
       ),
     );
   }

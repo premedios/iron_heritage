@@ -11,6 +11,8 @@ final class TemplateDetailScreen extends StatefulWidget {
     required this.onEdit,
     required this.onArchived,
     this.allowArchive = true,
+    this.actionsEnabled = true,
+    this.initialTemplate,
     super.key,
   });
 
@@ -20,6 +22,8 @@ final class TemplateDetailScreen extends StatefulWidget {
   final ValueChanged<WorkoutTemplateDraft> onEdit;
   final VoidCallback onArchived;
   final bool allowArchive;
+  final bool actionsEnabled;
+  final WorkoutTemplateDraft? initialTemplate;
 
   @override
   State<TemplateDetailScreen> createState() => _TemplateDetailScreenState();
@@ -38,7 +42,11 @@ final class _TemplateDetailScreenState extends State<TemplateDetailScreen> {
   @override
   void initState() {
     super.initState();
-    _load();
+    _template = widget.initialTemplate;
+    _loading = widget.initialTemplate == null;
+    if (_loading) {
+      _load();
+    }
   }
 
   @override
@@ -47,11 +55,19 @@ final class _TemplateDetailScreenState extends State<TemplateDetailScreen> {
     final loadIdentityChanged =
         oldWidget.templateId != widget.templateId ||
         !identical(oldWidget.repository, widget.repository);
-    if (loadIdentityChanged) {
+    final initialChanged = !identical(
+      oldWidget.initialTemplate,
+      widget.initialTemplate,
+    );
+    if (loadIdentityChanged || initialChanged) {
       _operationGeneration++;
       _writing = false;
-      _template = null;
-      _load();
+      _template = widget.initialTemplate;
+      _loadError = null;
+      _loading = widget.initialTemplate == null;
+      if (_loading) {
+        _load();
+      }
     }
   }
 
@@ -68,11 +84,13 @@ final class _TemplateDetailScreenState extends State<TemplateDetailScreen> {
               child: Semantics(
                 label: 'Edit Template',
                 button: true,
-                enabled: !_writing,
+                enabled: !_writing && widget.actionsEnabled,
                 excludeSemantics: true,
                 child: IconButton(
                   tooltip: 'Edit Template',
-                  onPressed: _writing ? null : () => widget.onEdit(template),
+                  onPressed: _writing || !widget.actionsEnabled
+                      ? null
+                      : () => widget.onEdit(template),
                   icon: const Icon(Icons.edit_outlined),
                 ),
               ),
@@ -82,7 +100,7 @@ final class _TemplateDetailScreenState extends State<TemplateDetailScreen> {
               dimension: 48,
               child: PopupMenuButton<_TemplateAction>(
                 tooltip: 'More Template actions',
-                enabled: !_writing,
+                enabled: !_writing && widget.actionsEnabled,
                 onSelected: (action) {
                   switch (action) {
                     case _TemplateAction.archive:
@@ -113,6 +131,7 @@ final class _TemplateDetailScreenState extends State<TemplateDetailScreen> {
         (final value?, _, _) => _TemplateDetail(
           template: value,
           writing: _writing,
+          actionsEnabled: widget.actionsEnabled,
           onStartWorkout: widget.onStartWorkout,
         ),
       },
@@ -363,11 +382,13 @@ final class _TemplateDetail extends StatelessWidget {
   const _TemplateDetail({
     required this.template,
     required this.writing,
+    required this.actionsEnabled,
     required this.onStartWorkout,
   });
 
   final WorkoutTemplateDraft template;
   final bool writing;
+  final bool actionsEnabled;
   final VoidCallback onStartWorkout;
 
   @override
@@ -412,7 +433,7 @@ final class _TemplateDetail extends StatelessWidget {
               width: double.infinity,
               height: 48,
               child: FilledButton.icon(
-                onPressed: writing ? null : onStartWorkout,
+                onPressed: writing || !actionsEnabled ? null : onStartWorkout,
                 icon: const Icon(Icons.play_arrow),
                 label: const Text('Start Workout'),
               ),

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' show SemanticsAction;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -387,6 +388,11 @@ void main() {
       ),
       findsOneWidget,
     );
+    final retrySemantics = tester.getSemantics(find.bySemanticsLabel('Retry'));
+    expect(
+      retrySemantics.getSemanticsData().hasAction(SemanticsAction.tap),
+      isTrue,
+    );
     repository.loadError = null;
     await tester.tap(find.widgetWithText(OutlinedButton, 'Retry'));
     await tester.pumpAndSettle();
@@ -426,6 +432,112 @@ void main() {
 
     expect(find.textContaining('Could not refresh Template:'), findsNothing);
     expect(find.byType(TemplateDetailScreen), findsOneWidget);
+  });
+
+  testWidgets('owned refresh serializes editing and renders newest result', (
+    tester,
+  ) async {
+    final repository = await _pumpDetail(tester);
+    await _openUpper(tester);
+    await tester.tap(find.byTooltip('Edit Template'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Upper'),
+      'Newest Upper',
+    );
+    repository.delayTemplateLoad = true;
+
+    await tester.tap(find.widgetWithText(TextButton, 'Save'));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+
+    expect(repository.templateLoadCompleters, hasLength(1));
+    expect(
+      tester
+          .widget<IconButton>(
+            find.ancestor(
+              of: find.byIcon(Icons.edit_outlined),
+              matching: find.byType(IconButton),
+            ),
+          )
+          .onPressed,
+      isNull,
+    );
+    expect(
+      tester
+          .widget<OutlinedButton>(
+            find.widgetWithText(OutlinedButton, 'Save copy to Templates'),
+          )
+          .onPressed,
+      isNull,
+    );
+    await tester.tap(find.byTooltip('Edit Template'), warnIfMissed: false);
+    await tester.pump();
+    expect(find.byType(TemplateEditorScreen), findsNothing);
+
+    repository.delayTemplateLoad = false;
+    repository.completeTemplateLoad(0, repository.templates[41]!);
+    await tester.pumpAndSettle();
+
+    expect(repository.templateLoadCompleters, hasLength(1));
+    expect(find.text('Newest Upper'), findsWidgets);
+    expect(find.byType(TemplateEditorScreen), findsNothing);
+  });
+
+  testWidgets('null owned refresh shows not-found and disables stale actions', (
+    tester,
+  ) async {
+    final repository = await _pumpDetail(tester);
+    await _openUpper(tester);
+    await tester.tap(find.byTooltip('Edit Template'));
+    await tester.pumpAndSettle();
+    repository.templateLoadReturnsNull = true;
+
+    await tester.tap(find.widgetWithText(TextButton, 'Save'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Could not refresh Template: Template not found'),
+      findsOneWidget,
+    );
+    expect(
+      find.bySemanticsLabel('Could not refresh Template: Template not found'),
+      findsOneWidget,
+    );
+    expect(
+      tester
+          .widget<IconButton>(
+            find.ancestor(
+              of: find.byIcon(Icons.edit_outlined),
+              matching: find.byType(IconButton),
+            ),
+          )
+          .onPressed,
+      isNull,
+    );
+    expect(
+      tester
+          .widget<OutlinedButton>(
+            find.widgetWithText(OutlinedButton, 'Save copy to Templates'),
+          )
+          .onPressed,
+      isNull,
+    );
+    expect(
+      tester
+          .widget<FilledButton>(
+            find.widgetWithText(FilledButton, 'Start Workout'),
+          )
+          .onPressed,
+      isNull,
+    );
+
+    repository.templateLoadReturnsNull = false;
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Retry refresh'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Could not refresh Template:'), findsNothing);
+    expect(find.text('Start Workout'), findsOneWidget);
   });
 
   testWidgets('stale Routine load cannot replace a newly selected identity', (
@@ -724,6 +836,7 @@ final class _RoutineDetailRepository implements TrainingRepository {
   Object? archiveError;
   bool delayRoutineLoad = false;
   bool delayTemplateLoad = false;
+  bool templateLoadReturnsNull = false;
   bool delayCopy = false;
   int loadRoutineCalls = 0;
   Completer<int>? _copyCompleter;
@@ -763,6 +876,9 @@ final class _RoutineDetailRepository implements TrainingRepository {
       final completer = Completer<WorkoutTemplateDraft?>();
       templateLoadCompleters.add(completer);
       return completer.future;
+    }
+    if (templateLoadReturnsNull) {
+      return Future.value();
     }
     return Future.value(templates[id]);
   }
