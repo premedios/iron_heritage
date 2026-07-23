@@ -1,0 +1,587 @@
+import 'package:drift/drift.dart';
+
+import '../../../core/database/database.dart';
+import '../domain/training_models.dart';
+import '../domain/training_validation.dart';
+import 'training_repository.dart';
+
+final class DriftTrainingRepository implements TrainingRepository {
+  DriftTrainingRepository(this._db, {DateTime Function()? now})
+    : _now = now ?? DateTime.now;
+
+  final AppDatabase _db;
+  final DateTime Function() _now;
+
+  @override
+  Stream<List<WorkoutTemplateSummary>> watchTemplates({
+    required bool archived,
+    String query = '',
+  }) {
+    final statement = _db.select(_db.workoutTemplates).join([
+      leftOuterJoin(
+        _db.exercisePrescriptions,
+        _db.exercisePrescriptions.templateId.equalsExp(_db.workoutTemplates.id),
+      ),
+      leftOuterJoin(
+        _db.exercises,
+        _db.exercises.id.equalsExp(_db.exercisePrescriptions.exerciseId),
+      ),
+    ]);
+    statement
+      ..where(
+        _db.workoutTemplates.routineId.isNull() &
+            (archived
+                ? _db.workoutTemplates.archivedAt.isNotNull()
+                : _db.workoutTemplates.archivedAt.isNull()),
+      )
+      ..orderBy([
+        OrderingTerm.desc(_db.workoutTemplates.updatedAt),
+        OrderingTerm.asc(_db.exercisePrescriptions.position),
+      ]);
+
+    final normalizedQuery = TrainingValidation.normalizeName(query);
+    return statement.watch().map((rows) {
+      final summaries = <int, WorkoutTemplateSummary>{};
+      for (final row in rows) {
+        final template = row.readTable(_db.workoutTemplates);
+        final exercise = row.readTableOrNull(_db.exercises);
+        final existing = summaries[template.id];
+        summaries[template.id] = WorkoutTemplateSummary(
+          id: template.id,
+          name: template.name,
+          exerciseNames: [
+            ...?existing?.exerciseNames,
+            if (exercise != null) exercise.name,
+          ],
+          updatedAt: template.updatedAt,
+        );
+      }
+
+      return summaries.values
+          .where(
+            (summary) =>
+                TrainingValidation.normalizeName(
+                  summary.name,
+                ).contains(normalizedQuery) ||
+                summary.exerciseNames.any(
+                  (name) => TrainingValidation.normalizeName(
+                    name,
+                  ).contains(normalizedQuery),
+                ),
+          )
+          .toList()
+        ..sort((left, right) => right.updatedAt.compareTo(left.updatedAt));
+    });
+  }
+
+  @override
+  Future<WorkoutTemplateDraft?> loadTemplate(int id) async {
+    final template = await (_db.select(
+      _db.workoutTemplates,
+    )..where((row) => row.id.equals(id))).getSingleOrNull();
+    if (template == null) {
+      return null;
+    }
+
+    return WorkoutTemplateDraft(
+      id: template.id,
+      routineId: template.routineId,
+      archivedAt: template.archivedAt,
+      name: template.name,
+      prescriptions: await _loadPrescriptions(template.id),
+    );
+  }
+
+  @override
+  Future<int> saveTemplate(WorkoutTemplateDraft draft) async {
+    final structuralErrors = TrainingValidation.template(draft);
+    if (structuralErrors.isNotEmpty) {
+      throw InvalidTrainingDraft(structuralErrors);
+    }
+
+    return _db.transaction(() async {
+      final persistedTemplate = draft.id == null
+          ? null
+          : await (_db.select(
+              _db.workoutTemplates,
+            )..where((row) => row.id.equals(draft.id!))).getSingle();
+      final routineId = persistedTemplate == null
+          ? draft.routineId
+          : persistedTemplate.routineId;
+      await _assertTemplateNameAvailable(draft, routineId: routineId);
+
+      final timestamp = _now();
+      final templateId = draft.id == null
+          ? await _db
+                .into(_db.workoutTemplates)
+                .insert(
+                  WorkoutTemplatesCompanion.insert(
+                    name: draft.name.trim(),
+                    routineId: Value(routineId),
+                    position: const Value.absent(),
+                    createdAt: Value(timestamp),
+                    updatedAt: Value(timestamp),
+                  ),
+                )
+          : draft.id!;
+      if (draft.id != null) {
+        await (_db.update(
+          _db.workoutTemplates,
+        )..where((row) => row.id.equals(templateId))).write(
+          WorkoutTemplatesCompanion(
+            name: Value(draft.name.trim()),
+            updatedAt: Value(timestamp),
+          ),
+        );
+      }
+      await _replacePrescriptions(templateId, draft.prescriptions, timestamp);
+      return templateId;
+    });
+  }
+
+  @override
+  Future<ExercisePrescriptionDraft?> latestPrescription(int exerciseId) async {
+    final prescription =
+        await (_db.select(_db.exercisePrescriptions)
+              ..where((row) => row.exerciseId.equals(exerciseId))
+              ..orderBy([
+                (row) => OrderingTerm.desc(row.updatedAt),
+                (row) => OrderingTerm.desc(row.id),
+              ])
+              ..limit(1))
+            .getSingleOrNull();
+    if (prescription == null) {
+      return null;
+    }
+
+    final exercise = await (_db.select(
+      _db.exercises,
+    )..where((row) => row.id.equals(exerciseId))).getSingle();
+    final draft = ExercisePrescriptionDraft(
+      id: prescription.id,
+      exerciseId: prescription.exerciseId,
+      exerciseName: exercise.name,
+      notes: prescription.notes,
+      plannedSets: await _loadPlannedSets(prescription.id),
+    );
+    return draft.deepCopy();
+  }
+
+  @override
+  Future<void> setTemplateArchived(int id, {required bool archived}) async {
+    final template =
+        await (_db.select(_db.workoutTemplates)
+              ..where((row) => row.id.equals(id) & row.routineId.isNull()))
+            .getSingleOrNull();
+    if (template == null) {
+      throw StateError('Standalone Template not found');
+    }
+    if (!archived) {
+      await _assertTemplateNameAvailable(
+        WorkoutTemplateDraft(
+          id: template.id,
+          name: template.name,
+          prescriptions: const [],
+        ),
+        routineId: template.routineId,
+      );
+    }
+
+    final timestamp = _now();
+    await (_db.update(
+      _db.workoutTemplates,
+    )..where((row) => row.id.equals(id) & row.routineId.isNull())).write(
+      WorkoutTemplatesCompanion(
+        archivedAt: Value(archived ? timestamp : null),
+        updatedAt: Value(timestamp),
+      ),
+    );
+  }
+
+  Future<void> _assertTemplateNameAvailable(
+    WorkoutTemplateDraft draft, {
+    required int? routineId,
+  }) async {
+    if (routineId != null) {
+      return;
+    }
+    final normalizedName = TrainingValidation.normalizeName(draft.name);
+    final standaloneTemplates = await (_db.select(
+      _db.workoutTemplates,
+    )..where((row) => row.routineId.isNull())).get();
+    final duplicate = standaloneTemplates.any(
+      (row) =>
+          row.id != draft.id &&
+          TrainingValidation.normalizeName(row.name) == normalizedName,
+    );
+    if (duplicate) {
+      throw const DuplicateTrainingName(
+        'name',
+        'A Template with this name already exists',
+      );
+    }
+  }
+
+  Future<void> _replacePrescriptions(
+    int templateId,
+    List<ExercisePrescriptionDraft> prescriptions,
+    DateTime timestamp,
+  ) async {
+    final existing = await (_db.select(
+      _db.exercisePrescriptions,
+    )..where((row) => row.templateId.equals(templateId))).get();
+    final existingIds = existing.map((row) => row.id).toList();
+    if (existingIds.isNotEmpty) {
+      await (_db.delete(
+        _db.plannedSets,
+      )..where((row) => row.prescriptionId.isIn(existingIds))).go();
+    }
+    await (_db.delete(
+      _db.exercisePrescriptions,
+    )..where((row) => row.templateId.equals(templateId))).go();
+
+    for (var position = 0; position < prescriptions.length; position++) {
+      final prescription = prescriptions[position];
+      final prescriptionId = await _db
+          .into(_db.exercisePrescriptions)
+          .insert(
+            ExercisePrescriptionsCompanion.insert(
+              templateId: templateId,
+              exerciseId: prescription.exerciseId,
+              position: position,
+              notes: Value(prescription.notes),
+              updatedAt: Value(timestamp),
+            ),
+          );
+      for (
+        var setPosition = 0;
+        setPosition < prescription.plannedSets.length;
+        setPosition++
+      ) {
+        final set = prescription.plannedSets[setPosition];
+        await _db
+            .into(_db.plannedSets)
+            .insert(
+              PlannedSetsCompanion.insert(
+                prescriptionId: prescriptionId,
+                position: setPosition,
+                weight: Value(set.weight),
+                minReps: Value(set.minReps),
+                maxReps: Value(set.maxReps),
+                rir: Value(set.rir),
+                isDropset: Value(set.type == PlannedSetType.dropset),
+              ),
+            );
+      }
+    }
+  }
+
+  Future<List<ExercisePrescriptionDraft>> _loadPrescriptions(
+    int templateId,
+  ) async {
+    final statement = _db.select(_db.exercisePrescriptions).join([
+      innerJoin(
+        _db.exercises,
+        _db.exercises.id.equalsExp(_db.exercisePrescriptions.exerciseId),
+      ),
+    ]);
+    statement
+      ..where(_db.exercisePrescriptions.templateId.equals(templateId))
+      ..orderBy([OrderingTerm.asc(_db.exercisePrescriptions.position)]);
+    final rows = await statement.get();
+
+    return Future.wait(
+      rows.map((row) async {
+        final prescription = row.readTable(_db.exercisePrescriptions);
+        final exercise = row.readTable(_db.exercises);
+        return ExercisePrescriptionDraft(
+          id: prescription.id,
+          exerciseId: prescription.exerciseId,
+          exerciseName: exercise.name,
+          notes: prescription.notes,
+          plannedSets: await _loadPlannedSets(prescription.id),
+        );
+      }),
+    );
+  }
+
+  Future<List<PlannedSetDraft>> _loadPlannedSets(int prescriptionId) async {
+    final rows =
+        await (_db.select(_db.plannedSets)
+              ..where((row) => row.prescriptionId.equals(prescriptionId))
+              ..orderBy([(row) => OrderingTerm.asc(row.position)]))
+            .get();
+    return [
+      for (final row in rows)
+        PlannedSetDraft(
+          id: row.id,
+          weight: row.weight,
+          minReps: row.minReps,
+          maxReps: row.maxReps,
+          rir: row.rir,
+          type: row.isDropset ? PlannedSetType.dropset : PlannedSetType.working,
+        ),
+    ];
+  }
+
+  @override
+  Stream<List<RoutineSummary>> watchRoutines({
+    required bool archived,
+    String query = '',
+  }) {
+    final statement = _db.select(_db.routines).join([
+      leftOuterJoin(
+        _db.workoutTemplates,
+        _db.workoutTemplates.routineId.equalsExp(_db.routines.id) &
+            _db.workoutTemplates.archivedAt.isNull(),
+      ),
+    ]);
+    statement
+      ..where(
+        archived
+            ? _db.routines.archivedAt.isNotNull()
+            : _db.routines.archivedAt.isNull(),
+      )
+      ..orderBy([
+        OrderingTerm.desc(_db.routines.updatedAt),
+        OrderingTerm.asc(_db.workoutTemplates.position),
+      ]);
+
+    final normalizedQuery = TrainingValidation.normalizeName(query);
+    return statement.watch().map((rows) {
+      final summaries = <int, RoutineSummary>{};
+      for (final row in rows) {
+        final routine = row.readTable(_db.routines);
+        final template = row.readTableOrNull(_db.workoutTemplates);
+        final existing = summaries[routine.id];
+        summaries[routine.id] = RoutineSummary(
+          id: routine.id,
+          name: routine.name,
+          templateNames: [
+            ...?existing?.templateNames,
+            if (template != null) template.name,
+          ],
+          updatedAt: routine.updatedAt,
+        );
+      }
+
+      return summaries.values
+          .where(
+            (summary) =>
+                TrainingValidation.normalizeName(
+                  summary.name,
+                ).contains(normalizedQuery) ||
+                summary.templateNames.any(
+                  (name) => TrainingValidation.normalizeName(
+                    name,
+                  ).contains(normalizedQuery),
+                ),
+          )
+          .toList()
+        ..sort((left, right) => right.updatedAt.compareTo(left.updatedAt));
+    });
+  }
+
+  @override
+  Future<RoutineDraft?> loadRoutine(int id) async {
+    final routine = await (_db.select(
+      _db.routines,
+    )..where((row) => row.id.equals(id))).getSingleOrNull();
+    if (routine == null) {
+      return null;
+    }
+
+    final templates =
+        await (_db.select(_db.workoutTemplates)
+              ..where(
+                (row) => row.routineId.equals(id) & row.archivedAt.isNull(),
+              )
+              ..orderBy([(row) => OrderingTerm.asc(row.position)]))
+            .get();
+    return RoutineDraft(
+      id: routine.id,
+      archivedAt: routine.archivedAt,
+      name: routine.name,
+      templates: await Future.wait(
+        templates.map((template) async {
+          return WorkoutTemplateDraft(
+            id: template.id,
+            routineId: template.routineId,
+            archivedAt: template.archivedAt,
+            name: template.name,
+            prescriptions: await _loadPrescriptions(template.id),
+          );
+        }),
+      ),
+    );
+  }
+
+  @override
+  Future<int> saveRoutine(RoutineDraft draft) async {
+    final structuralErrors = TrainingValidation.routine(draft);
+    if (structuralErrors.isNotEmpty) {
+      throw InvalidTrainingDraft(structuralErrors);
+    }
+
+    return _db.transaction(() async {
+      final persistedRoutine = draft.id == null
+          ? null
+          : await (_db.select(
+              _db.routines,
+            )..where((row) => row.id.equals(draft.id!))).getSingleOrNull();
+      if (draft.id != null && persistedRoutine == null) {
+        throw StateError('Routine not found');
+      }
+      if (persistedRoutine?.archivedAt == null) {
+        await _assertRoutineNameAvailable(draft);
+      }
+      final timestamp = _now();
+      final routineId = await _upsertRoutine(draft, timestamp);
+      final existingIds = await _activeRoutineTemplateIds(routineId);
+      final keptIds = <int>{};
+
+      for (var index = 0; index < draft.templates.length; index++) {
+        final source = draft.templates[index];
+        final owned = source.routineId == routineId
+            ? source
+            : source.deepCopy(routineId: routineId);
+        final templateId = await _saveOwnedTemplate(
+          owned,
+          routineId: routineId,
+          position: index,
+          timestamp: timestamp,
+        );
+        keptIds.add(templateId);
+      }
+
+      for (final removedId in existingIds.difference(keptIds)) {
+        await (_db.update(_db.workoutTemplates)
+              ..where((row) => row.id.equals(removedId)))
+            .write(WorkoutTemplatesCompanion(archivedAt: Value(timestamp)));
+      }
+      return routineId;
+    });
+  }
+
+  @override
+  Future<int> saveRoutineTemplateAsStandalone(int templateId) async {
+    final source = await loadTemplate(templateId);
+    if (source == null || source.routineId == null) {
+      throw StateError('Routine-owned Template not found');
+    }
+    return saveTemplate(source.deepCopy());
+  }
+
+  @override
+  Future<void> setRoutineArchived(int id, {required bool archived}) {
+    return _db.transaction(() async {
+      final routine = await (_db.select(
+        _db.routines,
+      )..where((row) => row.id.equals(id))).getSingleOrNull();
+      if (routine == null) {
+        throw StateError('Routine not found');
+      }
+      if (!archived) {
+        await _assertRoutineNameAvailable(
+          RoutineDraft(id: routine.id, name: routine.name, templates: const []),
+        );
+      }
+
+      final timestamp = _now();
+      await (_db.update(_db.routines)..where((row) => row.id.equals(id))).write(
+        RoutinesCompanion(
+          archivedAt: Value(archived ? timestamp : null),
+          updatedAt: Value(timestamp),
+        ),
+      );
+    });
+  }
+
+  Future<void> _assertRoutineNameAvailable(RoutineDraft draft) async {
+    final normalizedName = TrainingValidation.normalizeName(draft.name);
+    final activeRoutines = await (_db.select(
+      _db.routines,
+    )..where((row) => row.archivedAt.isNull())).get();
+    final duplicate = activeRoutines.any(
+      (row) =>
+          row.id != draft.id &&
+          TrainingValidation.normalizeName(row.name) == normalizedName,
+    );
+    if (duplicate) {
+      throw const DuplicateTrainingName(
+        'name',
+        'A Routine with this name already exists',
+      );
+    }
+  }
+
+  Future<int> _upsertRoutine(RoutineDraft draft, DateTime timestamp) async {
+    if (draft.id == null) {
+      return _db
+          .into(_db.routines)
+          .insert(
+            RoutinesCompanion.insert(
+              name: draft.name.trim(),
+              createdAt: Value(timestamp),
+              updatedAt: Value(timestamp),
+            ),
+          );
+    }
+
+    await (_db.update(
+      _db.routines,
+    )..where((row) => row.id.equals(draft.id!))).write(
+      RoutinesCompanion(
+        name: Value(draft.name.trim()),
+        updatedAt: Value(timestamp),
+      ),
+    );
+    return draft.id!;
+  }
+
+  Future<Set<int>> _activeRoutineTemplateIds(int routineId) async {
+    final templates =
+        await (_db.select(_db.workoutTemplates)..where(
+              (row) =>
+                  row.routineId.equals(routineId) & row.archivedAt.isNull(),
+            ))
+            .get();
+    return templates.map((template) => template.id).toSet();
+  }
+
+  Future<int> _saveOwnedTemplate(
+    WorkoutTemplateDraft draft, {
+    required int routineId,
+    required int position,
+    required DateTime timestamp,
+  }) async {
+    final templateId = draft.id == null
+        ? await _db
+              .into(_db.workoutTemplates)
+              .insert(
+                WorkoutTemplatesCompanion.insert(
+                  name: draft.name.trim(),
+                  routineId: Value(routineId),
+                  position: Value(position),
+                  createdAt: Value(timestamp),
+                  updatedAt: Value(timestamp),
+                ),
+              )
+        : draft.id!;
+    if (draft.id != null) {
+      await (_db.update(
+        _db.workoutTemplates,
+      )..where((row) => row.id.equals(templateId))).write(
+        WorkoutTemplatesCompanion(
+          name: Value(draft.name.trim()),
+          routineId: Value(routineId),
+          position: Value(position),
+          updatedAt: Value(timestamp),
+          archivedAt: const Value(null),
+        ),
+      );
+    }
+    await _replacePrescriptions(templateId, draft.prescriptions, timestamp);
+    return templateId;
+  }
+}
