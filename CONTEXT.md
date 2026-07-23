@@ -5,12 +5,28 @@ Core vocabulary for the Iron Heritage workout application, targeted at bodybuild
 ## Language
 
 **Routine**:
-A multi-day training plan (e.g., Push-Pull-Legs) that defines the order of its planned training days.
+A reusable training plan containing an ordered collection of one or more Workout Templates. Adding a standalone Workout Template to a Routine creates an independent copy; later edits never propagate between them. A Workout Template created inside a Routine remains Routine-only, unless the user explicitly saves an independent copy to standalone Templates.
 _Avoid_: Program, schedule, workout
 
+**Archived Routine**:
+A Routine removed from normal selection while retained for reference and completed Workout history. It must be restored before it can be selected for future scheduling.
+_Avoid_: Deleted Routine, inactive Routine
+
 **Workout Template**:
-A reusable prescription for one training day within a Routine. Starting it creates a Workout.
+A reusable prescription for one training day containing one or more ordered Exercise Prescriptions. It may exist without a Routine; starting it creates a Workout. Standalone names are unique case-insensitively; copies inside a Routine need only be unique within that Routine.
 _Avoid_: Routine Day, planned Workout
+
+**Archived Workout Template**:
+A standalone Workout Template removed from normal selection while retained for reference and completed Workout history. Archiving it does not affect independent copies already held by Routines.
+_Avoid_: Deleted Workout Template, inactive Workout Template
+
+**Exercise Prescription**:
+An Exercise configured within a Workout Template with one or more ordered Planned Sets and optional notes. Adding an Exercise used before prefills an editable copy of its most recently saved Exercise Prescription; later edits do not propagate.
+_Avoid_: Template Exercise
+
+**Planned Set**:
+A set row inside an Exercise Prescription with optional target Weight, repetition range, and RIR. Its type defaults to Working and may be changed to Dropset. At least one Planned Set is required per Exercise Prescription, but its target fields may initially be blank.
+_Avoid_: Logged Set, completed Set
 
 **Workout**:
 A single, specific training session executed on a given day.
