@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../data/training_repository.dart';
@@ -24,6 +25,7 @@ final class RoutineDetailScreen extends StatefulWidget {
 }
 
 final class _RoutineDetailScreenState extends State<RoutineDetailScreen> {
+  late final ValueNotifier<int> _identityRevision;
   RoutineDraft? _routine;
   Object? _loadError;
   bool _loading = true;
@@ -36,7 +38,14 @@ final class _RoutineDetailScreenState extends State<RoutineDetailScreen> {
   @override
   void initState() {
     super.initState();
+    _identityRevision = ValueNotifier<int>(0);
     _load();
+  }
+
+  @override
+  void dispose() {
+    _identityRevision.dispose();
+    super.dispose();
   }
 
   @override
@@ -46,6 +55,7 @@ final class _RoutineDetailScreenState extends State<RoutineDetailScreen> {
         oldWidget.routineId != widget.routineId ||
         !identical(oldWidget.repository, widget.repository);
     if (identityChanged) {
+      _identityRevision.value++;
       _operationGeneration++;
       _writing = false;
       _routine = null;
@@ -121,6 +131,8 @@ final class _RoutineDetailScreenState extends State<RoutineDetailScreen> {
         (final value?, _, _) => _RoutineTemplateList(
           routine: value,
           enabled: !_writing,
+          refreshError: _loadError,
+          onRetry: _load,
           onOpen: _openTemplate,
         ),
       },
@@ -170,15 +182,19 @@ final class _RoutineDetailScreenState extends State<RoutineDetailScreen> {
     }
     final routineId = widget.routineId;
     final repository = widget.repository;
+    bool parentCurrent() =>
+        mounted &&
+        routineId == widget.routineId &&
+        identical(repository, widget.repository);
     await Navigator.of(context).push<void>(
       MaterialPageRoute(
         builder: (_) => _OwnedTemplateDetailRoute(
           initial: template,
           repository: repository,
+          parentIdentityRevision: _identityRevision,
+          parentCurrent: parentCurrent,
           onStartWorkout: (templateId) {
-            if (mounted &&
-                routineId == widget.routineId &&
-                identical(repository, widget.repository)) {
+            if (parentCurrent()) {
               widget.onStartWorkout(templateId);
             }
           },
@@ -328,64 +344,81 @@ final class _RoutineTemplateList extends StatelessWidget {
   const _RoutineTemplateList({
     required this.routine,
     required this.enabled,
+    required this.refreshError,
+    required this.onRetry,
     required this.onOpen,
   });
 
   final RoutineDraft routine;
   final bool enabled;
+  final Object? refreshError;
+  final VoidCallback onRetry;
   final ValueChanged<WorkoutTemplateDraft> onOpen;
 
   @override
   Widget build(BuildContext context) {
-    return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
-      itemCount: routine.templates.length,
-      itemBuilder: (context, index) {
-        final template = routine.templates[index];
-        final count = template.prescriptions.length;
-        final countLabel = '$count ${count == 1 ? 'exercise' : 'exercises'}';
-        return Semantics(
-          container: true,
-          label:
-              'Template ${index + 1} of ${routine.templates.length}, '
-              '${template.name}, $countLabel',
-          button: true,
-          enabled: enabled,
-          excludeSemantics: true,
-          child: Card(
-            margin: const EdgeInsets.only(bottom: 12),
-            clipBehavior: Clip.antiAlias,
-            child: InkWell(
-              onTap: enabled ? () => onOpen(template) : null,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(minHeight: 72),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Text(
-                        template.name,
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(countLabel),
-                      if (template.prescriptions.isNotEmpty)
-                        Text(
-                          template.prescriptions
-                              .map((item) => item.exerciseName)
-                              .join(', '),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
+    return Column(
+      children: [
+        if (refreshError case final error?)
+          _InlineRefreshError(
+            message: 'Could not refresh Routine: $error',
+            retryLabel: 'Retry',
+            onRetry: onRetry,
+          ),
+        Expanded(
+          child: ListView.builder(
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
+            itemCount: routine.templates.length,
+            itemBuilder: (context, index) {
+              final template = routine.templates[index];
+              final count = template.prescriptions.length;
+              final countLabel =
+                  '$count ${count == 1 ? 'exercise' : 'exercises'}';
+              return Semantics(
+                container: true,
+                label:
+                    'Template ${index + 1} of ${routine.templates.length}, '
+                    '${template.name}, $countLabel',
+                button: true,
+                enabled: enabled,
+                excludeSemantics: true,
+                child: Card(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  clipBehavior: Clip.antiAlias,
+                  child: InkWell(
+                    onTap: enabled ? () => onOpen(template) : null,
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(minHeight: 72),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Text(
+                              template.name,
+                              style: Theme.of(context).textTheme.titleMedium,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(countLabel),
+                            if (template.prescriptions.isNotEmpty)
+                              Text(
+                                template.prescriptions
+                                    .map((item) => item.exerciseName)
+                                    .join(', '),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                          ],
                         ),
-                    ],
+                      ),
+                    ),
                   ),
                 ),
-              ),
-            ),
+              );
+            },
           ),
-        );
-      },
+        ),
+      ],
     );
   }
 }
@@ -394,11 +427,15 @@ final class _OwnedTemplateDetailRoute extends StatefulWidget {
   const _OwnedTemplateDetailRoute({
     required this.initial,
     required this.repository,
+    required this.parentIdentityRevision,
+    required this.parentCurrent,
     required this.onStartWorkout,
   });
 
   final WorkoutTemplateDraft initial;
   final TrainingRepository repository;
+  final ValueListenable<int> parentIdentityRevision;
+  final bool Function() parentCurrent;
   final ValueChanged<int> onStartWorkout;
 
   @override
@@ -411,8 +448,11 @@ final class _OwnedTemplateDetailRouteState
   late WorkoutTemplateDraft _template;
   bool _copying = false;
   String? _copyError;
+  String? _refreshError;
   int _detailRevision = 0;
   int _operationGeneration = 0;
+  bool _dismissScheduled = false;
+  MaterialPageRoute<void>? _editorRoute;
 
   int get _templateId => _template.id!;
 
@@ -420,6 +460,13 @@ final class _OwnedTemplateDetailRouteState
   void initState() {
     super.initState();
     _template = widget.initial;
+    widget.parentIdentityRevision.addListener(_parentIdentityChanged);
+  }
+
+  @override
+  void dispose() {
+    widget.parentIdentityRevision.removeListener(_parentIdentityChanged);
+    super.dispose();
   }
 
   @override
@@ -433,6 +480,7 @@ final class _OwnedTemplateDetailRouteState
       _template = widget.initial;
       _copying = false;
       _copyError = null;
+      _refreshError = null;
       _detailRevision++;
     }
   }
@@ -444,9 +492,10 @@ final class _OwnedTemplateDetailRouteState
         key: ValueKey((_templateId, _detailRevision)),
         templateId: _templateId,
         repository: widget.repository,
-        onStartWorkout: () => widget.onStartWorkout(_templateId),
+        onStartWorkout: _startWorkout,
         onEdit: _editTemplate,
         onArchived: _refreshTemplate,
+        allowArchive: false,
       ),
       bottomNavigationBar: SafeArea(
         minimum: const EdgeInsets.fromLTRB(16, 8, 16, 16),
@@ -454,6 +503,12 @@ final class _OwnedTemplateDetailRouteState
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            if (_refreshError case final error?)
+              _InlineRefreshError(
+                message: error,
+                retryLabel: 'Retry refresh',
+                onRetry: _refreshTemplate,
+              ),
             if (_copyError case final error?)
               Semantics(
                 container: true,
@@ -470,19 +525,18 @@ final class _OwnedTemplateDetailRouteState
                   ),
                 ),
               ),
+            if (_copying)
+              const Padding(
+                padding: EdgeInsets.only(bottom: 8),
+                child: LinearProgressIndicator(
+                  semanticsLabel: 'Saving Template copy',
+                ),
+              ),
             SizedBox(
               height: 48,
               child: OutlinedButton.icon(
                 onPressed: _copying ? null : _saveCopy,
-                icon: _copying
-                    ? const SizedBox.square(
-                        dimension: 18,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          semanticsLabel: 'Saving Template copy',
-                        ),
-                      )
-                    : const Icon(Icons.copy_outlined),
+                icon: const Icon(Icons.copy_outlined),
                 label: const Text('Save copy to Templates'),
               ),
             ),
@@ -493,22 +547,28 @@ final class _OwnedTemplateDetailRouteState
   }
 
   Future<void> _editTemplate(WorkoutTemplateDraft template) async {
-    if (_copying) {
+    if (_copying || !widget.parentCurrent()) {
       return;
     }
     _template = template;
     final generation = _operationGeneration;
     final templateId = _templateId;
     final repository = widget.repository;
-    await Navigator.of(context).push<void>(
-      MaterialPageRoute(
-        builder: (_) => TemplateEditorScreen.persisted(
-          initial: template,
-          repository: repository,
-          onSaved: (_) => Navigator.of(context).pop(),
+    final route = MaterialPageRoute<void>(
+      builder: (_) => TemplateEditorScreen.persisted(
+        initial: template,
+        repository: _CurrentTrainingRepository(
+          repository,
+          widget.parentCurrent,
         ),
+        onSaved: (_) => Navigator.of(context).pop(),
       ),
     );
+    _editorRoute = route;
+    await Navigator.of(context).push<void>(route);
+    if (identical(_editorRoute, route)) {
+      _editorRoute = null;
+    }
     if (_isCurrent(
       generation: generation,
       templateId: templateId,
@@ -519,9 +579,15 @@ final class _OwnedTemplateDetailRouteState
   }
 
   Future<void> _refreshTemplate() async {
+    if (!widget.parentCurrent()) {
+      return;
+    }
     final generation = _operationGeneration;
     final templateId = _templateId;
     final repository = widget.repository;
+    if (mounted) {
+      setState(() => _refreshError = null);
+    }
     try {
       final loaded = await repository.loadTemplate(templateId);
       if (loaded == null ||
@@ -534,15 +600,23 @@ final class _OwnedTemplateDetailRouteState
       }
       setState(() {
         _template = loaded;
+        _refreshError = null;
         _detailRevision++;
       });
-    } on Object {
-      // The embedded detail owns its load failure and retry state.
+    } on Object catch (error) {
+      if (!_isCurrent(
+        generation: generation,
+        templateId: templateId,
+        repository: repository,
+      )) {
+        return;
+      }
+      setState(() => _refreshError = 'Could not refresh Template: $error');
     }
   }
 
   Future<void> _saveCopy() async {
-    if (_copying) {
+    if (_copying || !widget.parentCurrent()) {
       return;
     }
     final generation = _operationGeneration;
@@ -592,9 +666,41 @@ final class _OwnedTemplateDetailRouteState
     required TrainingRepository repository,
   }) {
     return mounted &&
+        widget.parentCurrent() &&
         generation == _operationGeneration &&
         templateId == _templateId &&
         identical(repository, widget.repository);
+  }
+
+  void _startWorkout() {
+    if (widget.parentCurrent()) {
+      widget.onStartWorkout(_templateId);
+    }
+  }
+
+  void _parentIdentityChanged() {
+    _operationGeneration++;
+    if (_dismissScheduled || !mounted) {
+      return;
+    }
+    _dismissScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      final ownRoute = ModalRoute.of(context);
+      if (ownRoute == null) {
+        return;
+      }
+      final navigator = Navigator.of(context);
+      final editorRoute = _editorRoute;
+      if (editorRoute != null && editorRoute.isActive) {
+        navigator.removeRoute(editorRoute);
+      }
+      if (ownRoute.isActive) {
+        navigator.removeRoute(ownRoute);
+      }
+    });
   }
 }
 
@@ -606,19 +712,142 @@ final class _LoadError extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final message = 'Could not load Routine: $error';
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('Could not load Routine: $error', textAlign: TextAlign.center),
+            Semantics(
+              container: true,
+              liveRegion: true,
+              label: message,
+              excludeSemantics: true,
+              child: Text(message, textAlign: TextAlign.center),
+            ),
             const SizedBox(height: 12),
             FilledButton(onPressed: onRetry, child: const Text('Retry')),
           ],
         ),
       ),
     );
+  }
+}
+
+final class _InlineRefreshError extends StatelessWidget {
+  const _InlineRefreshError({
+    required this.message,
+    required this.retryLabel,
+    required this.onRetry,
+  });
+
+  final String message;
+  final String retryLabel;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      container: true,
+      liveRegion: true,
+      label: message,
+      excludeSemantics: true,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                message,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            ),
+            const SizedBox(width: 8),
+            OutlinedButton(onPressed: onRetry, child: Text(retryLabel)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+final class _CurrentTrainingRepository implements TrainingRepository {
+  const _CurrentTrainingRepository(this.delegate, this.isCurrent);
+
+  final TrainingRepository delegate;
+  final bool Function() isCurrent;
+
+  void _guard() {
+    if (!isCurrent()) {
+      throw StateError('Routine detail is no longer current');
+    }
+  }
+
+  @override
+  Future<ExercisePrescriptionDraft?> latestPrescription(int exerciseId) {
+    _guard();
+    return delegate.latestPrescription(exerciseId);
+  }
+
+  @override
+  Future<RoutineDraft?> loadRoutine(int id) {
+    _guard();
+    return delegate.loadRoutine(id);
+  }
+
+  @override
+  Future<WorkoutTemplateDraft?> loadTemplate(int id) {
+    _guard();
+    return delegate.loadTemplate(id);
+  }
+
+  @override
+  Future<int> saveRoutine(RoutineDraft draft) {
+    _guard();
+    return delegate.saveRoutine(draft);
+  }
+
+  @override
+  Future<int> saveRoutineTemplateAsStandalone(int templateId) {
+    _guard();
+    return delegate.saveRoutineTemplateAsStandalone(templateId);
+  }
+
+  @override
+  Future<int> saveTemplate(WorkoutTemplateDraft draft) {
+    _guard();
+    return delegate.saveTemplate(draft);
+  }
+
+  @override
+  Future<void> setRoutineArchived(int id, {required bool archived}) {
+    _guard();
+    return delegate.setRoutineArchived(id, archived: archived);
+  }
+
+  @override
+  Future<void> setTemplateArchived(int id, {required bool archived}) {
+    _guard();
+    return delegate.setTemplateArchived(id, archived: archived);
+  }
+
+  @override
+  Stream<List<RoutineSummary>> watchRoutines({
+    required bool archived,
+    String query = '',
+  }) {
+    _guard();
+    return delegate.watchRoutines(archived: archived, query: query);
+  }
+
+  @override
+  Stream<List<WorkoutTemplateSummary>> watchTemplates({
+    required bool archived,
+    String query = '',
+  }) {
+    _guard();
+    return delegate.watchTemplates(archived: archived, query: query);
   }
 }
 

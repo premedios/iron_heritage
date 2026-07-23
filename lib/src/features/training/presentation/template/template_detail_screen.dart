@@ -10,6 +10,7 @@ final class TemplateDetailScreen extends StatefulWidget {
     required this.onStartWorkout,
     required this.onEdit,
     required this.onArchived,
+    this.allowArchive = true,
     super.key,
   });
 
@@ -18,6 +19,7 @@ final class TemplateDetailScreen extends StatefulWidget {
   final VoidCallback onStartWorkout;
   final ValueChanged<WorkoutTemplateDraft> onEdit;
   final VoidCallback onArchived;
+  final bool allowArchive;
 
   @override
   State<TemplateDetailScreen> createState() => _TemplateDetailScreenState();
@@ -75,7 +77,7 @@ final class _TemplateDetailScreenState extends State<TemplateDetailScreen> {
                 ),
               ),
             ),
-          if (template != null)
+          if (template != null && widget.allowArchive)
             SizedBox.square(
               dimension: 48,
               child: PopupMenuButton<_TemplateAction>(
@@ -278,15 +280,19 @@ final class _LoadError extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final message = 'Could not load Template: $error';
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(
-              'Could not load Template: $error',
-              textAlign: TextAlign.center,
+            Semantics(
+              container: true,
+              liveRegion: true,
+              label: message,
+              excludeSemantics: true,
+              child: Text(message, textAlign: TextAlign.center),
             ),
             const SizedBox(height: 12),
             FilledButton(onPressed: onRetry, child: const Text('Retry')),

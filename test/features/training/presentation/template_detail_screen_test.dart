@@ -41,6 +41,7 @@ Future<_DetailRepository> _pumpDetail(
   ValueChanged<WorkoutTemplateDraft>? onEdit,
   VoidCallback? onArchived,
   _DetailRepository? repository,
+  bool allowArchive = true,
 }) async {
   final repo = repository ?? _DetailRepository(value ?? template());
   await tester.pumpWidget(
@@ -51,6 +52,7 @@ Future<_DetailRepository> _pumpDetail(
         onStartWorkout: onStartWorkout ?? () {},
         onEdit: onEdit ?? (_) {},
         onArchived: onArchived ?? () {},
+        allowArchive: allowArchive,
       ),
     ),
   );
@@ -101,6 +103,16 @@ void main() {
     expect(starts, 1);
     expect(edited, same(value));
     expect(edited?.id, 7);
+  });
+
+  testWidgets('archive capability can be hidden for owned Templates', (
+    tester,
+  ) async {
+    await _pumpDetail(tester, allowArchive: false);
+
+    expect(find.text('Start Workout'), findsOneWidget);
+    expect(find.byTooltip('Edit Template'), findsOneWidget);
+    expect(find.byTooltip('More Template actions'), findsNothing);
   });
 
   testWidgets('Archive requires confirmation and reports navigation once', (
@@ -242,6 +254,12 @@ void main() {
 
     expect(
       find.textContaining(
+        'Could not load Template: Bad state: database closed',
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.bySemanticsLabel(
         'Could not load Template: Bad state: database closed',
       ),
       findsOneWidget,

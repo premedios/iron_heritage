@@ -29,9 +29,14 @@ WorkoutTemplateDraft _template({
   );
 }
 
-RoutineDraft _routine({int id = 4, String name = 'Strength'}) {
+RoutineDraft _routine({
+  int id = 4,
+  String name = 'Strength',
+  DateTime? archivedAt,
+}) {
   return RoutineDraft(
     id: id,
+    archivedAt: archivedAt,
     name: name,
     templates: [
       _template(
@@ -80,7 +85,12 @@ void main() {
   testWidgets('renders ordered owned Templates without progression state', (
     tester,
   ) async {
-    await _pumpDetail(tester);
+    await _pumpDetail(
+      tester,
+      repository: _RoutineDetailRepository(
+        _routine(archivedAt: DateTime(2042, 9, 17)),
+      ),
+    );
 
     expect(find.widgetWithText(AppBar, 'Strength'), findsOneWidget);
     expect(
@@ -92,6 +102,8 @@ void main() {
     expect(find.textContaining('Active Routine'), findsNothing);
     expect(find.textContaining('Calendar'), findsNothing);
     expect(find.textContaining('Scheduled'), findsNothing);
+    expect(find.textContaining('2042'), findsNothing);
+    expect(find.textContaining('September'), findsNothing);
   });
 
   testWidgets('Routine Edit receives the loaded aggregate', (tester) async {
@@ -119,6 +131,9 @@ void main() {
     expect(find.text('Bench Press'), findsOneWidget);
     expect(find.text('Start Workout'), findsOneWidget);
     expect(find.text('Save copy to Templates'), findsOneWidget);
+    expect(find.byTooltip('More Template actions'), findsNothing);
+    expect(find.text('Archive'), findsNothing);
+    expect(find.text('Restore'), findsNothing);
   });
 
   testWidgets('owned detail starts the selected Template exactly once', (
@@ -163,7 +178,7 @@ void main() {
     tester,
   ) async {
     final repository = await _pumpDetail(tester);
-    final owned = repository.templates[41];
+    final owned = repository.templates[41]!;
     await _openUpper(tester);
 
     await tester.tap(find.text('Save copy to Templates'));
@@ -171,6 +186,18 @@ void main() {
 
     expect(repository.copyCalls, [41]);
     expect(repository.templates[41], same(owned));
+    expect(repository.standaloneCopies, hasLength(1));
+    final copy = repository.standaloneCopies.single;
+    expect(copy, isNot(same(owned)));
+    expect(copy.id, isNull);
+    expect(copy.routineId, isNull);
+    expect(copy.prescriptions.single.id, isNull);
+    expect(copy.prescriptions.single.plannedSets.single.id, isNull);
+    expect(copy.prescriptions, isNot(same(owned.prescriptions)));
+    expect(
+      copy.prescriptions.single.plannedSets,
+      isNot(same(owned.prescriptions.single.plannedSets)),
+    );
     expect(find.textContaining('Upper saved to Templates'), findsOneWidget);
   });
 
@@ -182,7 +209,7 @@ void main() {
         'name',
         'A Template with this name already exists',
       );
-    final owned = repository.templates[41];
+    final owned = repository.templates[41]!;
     await _pumpDetail(tester, repository: repository);
     await _openUpper(tester);
 
@@ -191,6 +218,7 @@ void main() {
 
     expect(repository.copyCalls, [41]);
     expect(repository.templates[41], same(owned));
+    expect(repository.standaloneCopies, isEmpty);
     expect(
       find.text('A Template with this name already exists'),
       findsOneWidget,
@@ -216,6 +244,9 @@ void main() {
     );
     expect(copyButton.onPressed, isNull);
     expect(repository.copyCalls, [41]);
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(find.byType(LinearProgressIndicator), findsOneWidget);
+    expect(find.bySemanticsLabel('Saving Template copy'), findsOneWidget);
     repository.completeCopy();
     await tester.pumpAndSettle();
 
@@ -300,6 +331,12 @@ void main() {
       find.textContaining('Could not load Routine: Bad state: database closed'),
       findsOneWidget,
     );
+    expect(
+      find.bySemanticsLabel(
+        'Could not load Routine: Bad state: database closed',
+      ),
+      findsOneWidget,
+    );
     repository.loadError = null;
     await tester.tap(find.widgetWithText(FilledButton, 'Retry'));
     await tester.pump();
@@ -325,6 +362,70 @@ void main() {
     expect(find.byKey(const Key('routine-detail-skeleton')), findsOneWidget);
     expect(find.bySemanticsLabel('Loading Routine'), findsOneWidget);
     expect(find.byType(CircularProgressIndicator), findsNothing);
+  });
+
+  testWidgets('cached Routine refresh failure stays visible with Retry', (
+    tester,
+  ) async {
+    final repository = await _pumpDetail(tester);
+    await _openUpper(tester);
+    repository.loadError = StateError('refresh unavailable');
+
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+
+    expect(find.text('Upper'), findsOneWidget);
+    expect(
+      find.textContaining(
+        'Could not refresh Routine: Bad state: refresh unavailable',
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.bySemanticsLabel(
+        'Could not refresh Routine: Bad state: refresh unavailable',
+      ),
+      findsOneWidget,
+    );
+    repository.loadError = null;
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Retry'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Could not refresh Routine:'), findsNothing);
+    expect(find.text('Lower'), findsOneWidget);
+  });
+
+  testWidgets('owned Template refresh failure is visible and retryable', (
+    tester,
+  ) async {
+    final repository = await _pumpDetail(tester);
+    await _openUpper(tester);
+    await tester.tap(find.byTooltip('Edit Template'));
+    await tester.pumpAndSettle();
+    repository.templateLoadError = StateError('template refresh unavailable');
+
+    await tester.tap(find.widgetWithText(TextButton, 'Save'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Bench Press'), findsOneWidget);
+    expect(
+      find.textContaining(
+        'Could not refresh Template: Bad state: template refresh unavailable',
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.bySemanticsLabel(
+        'Could not refresh Template: Bad state: template refresh unavailable',
+      ),
+      findsOneWidget,
+    );
+    repository.templateLoadError = null;
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Retry refresh'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Could not refresh Template:'), findsNothing);
+    expect(find.byType(TemplateDetailScreen), findsOneWidget);
   });
 
   testWidgets('stale Routine load cannot replace a newly selected identity', (
@@ -441,6 +542,142 @@ void main() {
     expect(secondCallbacks, 1);
   });
 
+  testWidgets('parent identity change dismisses owned detail and editor', (
+    tester,
+  ) async {
+    final first = _RoutineDetailRepository(_routine());
+    final second = _RoutineDetailRepository(
+      _routine(id: 5, name: 'New Routine'),
+    );
+    var routineId = 4;
+    TrainingRepository repository = first;
+    StateSetter? refresh;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: StatefulBuilder(
+          builder: (context, setState) {
+            refresh = setState;
+            return RoutineDetailScreen(
+              routineId: routineId,
+              repository: repository,
+              onStartWorkout: (_) {},
+              onEdit: (_) {},
+            );
+          },
+        ),
+      ),
+    );
+    await tester.pump();
+    await _openUpper(tester);
+    await tester.tap(find.byTooltip('Edit Template'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Upper'),
+      'Unsaved change',
+    );
+
+    routineId = 5;
+    repository = second;
+    refresh!(() {});
+    await tester.pumpAndSettle();
+
+    expect(find.byType(TemplateEditorScreen), findsNothing);
+    expect(find.byType(TemplateDetailScreen), findsNothing);
+    expect(find.text('New Routine'), findsOneWidget);
+    expect(first.savedTemplates, isEmpty);
+    expect(second.savedTemplates, isEmpty);
+  });
+
+  testWidgets('identity change ignores delayed owned copy completion', (
+    tester,
+  ) async {
+    final first = _RoutineDetailRepository(_routine())..delayCopy = true;
+    final second = _RoutineDetailRepository(
+      _routine(id: 5, name: 'New Routine'),
+    );
+    var routineId = 4;
+    TrainingRepository repository = first;
+    StateSetter? refresh;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: StatefulBuilder(
+          builder: (context, setState) {
+            refresh = setState;
+            return RoutineDetailScreen(
+              routineId: routineId,
+              repository: repository,
+              onStartWorkout: (_) {},
+              onEdit: (_) {},
+            );
+          },
+        ),
+      ),
+    );
+    await tester.pump();
+    await _openUpper(tester);
+    await tester.tap(find.text('Save copy to Templates'));
+    await tester.pump();
+
+    routineId = 5;
+    repository = second;
+    refresh!(() {});
+    await tester.pumpAndSettle();
+    first.completeCopy();
+    await tester.pumpAndSettle();
+
+    expect(first.copyCalls, [41]);
+    expect(second.copyCalls, isEmpty);
+    expect(find.textContaining('saved to Templates'), findsNothing);
+    expect(find.byType(TemplateDetailScreen), findsNothing);
+    expect(find.text('New Routine'), findsOneWidget);
+  });
+
+  testWidgets('identity change ignores delayed owned refresh completion', (
+    tester,
+  ) async {
+    final first = _RoutineDetailRepository(_routine());
+    final second = _RoutineDetailRepository(
+      _routine(id: 5, name: 'New Routine'),
+    );
+    var routineId = 4;
+    TrainingRepository repository = first;
+    StateSetter? refresh;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: StatefulBuilder(
+          builder: (context, setState) {
+            refresh = setState;
+            return RoutineDetailScreen(
+              routineId: routineId,
+              repository: repository,
+              onStartWorkout: (_) {},
+              onEdit: (_) {},
+            );
+          },
+        ),
+      ),
+    );
+    await tester.pump();
+    await _openUpper(tester);
+    await tester.tap(find.byTooltip('Edit Template'));
+    await tester.pumpAndSettle();
+    first.delayTemplateLoad = true;
+    await tester.tap(find.widgetWithText(TextButton, 'Save'));
+    await tester.pump();
+    expect(first.templateLoadCompleters, hasLength(1));
+
+    routineId = 5;
+    repository = second;
+    refresh!(() {});
+    await tester.pumpAndSettle();
+    first.completeTemplateLoad(0, first.templates[41]!);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(TemplateDetailScreen), findsNothing);
+    expect(find.text('New Routine'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('cards and actions expose accessible labels and targets', (
     tester,
   ) async {
@@ -476,13 +713,17 @@ final class _RoutineDetailRepository implements TrainingRepository {
   RoutineDraft routine;
   final templates = <int, WorkoutTemplateDraft>{};
   final savedTemplates = <WorkoutTemplateDraft>[];
+  final standaloneCopies = <WorkoutTemplateDraft>[];
   final copyCalls = <int>[];
   final archiveCalls = <({int id, bool archived})>[];
   final routineLoadCompleters = <Completer<RoutineDraft?>>[];
+  final templateLoadCompleters = <Completer<WorkoutTemplateDraft?>>[];
   Object? loadError;
+  Object? templateLoadError;
   Object? copyError;
   Object? archiveError;
   bool delayRoutineLoad = false;
+  bool delayTemplateLoad = false;
   bool delayCopy = false;
   int loadRoutineCalls = 0;
   Completer<int>? _copyCompleter;
@@ -492,6 +733,10 @@ final class _RoutineDetailRepository implements TrainingRepository {
   }
 
   void completeCopy() => _copyCompleter!.complete(1000);
+
+  void completeTemplateLoad(int index, WorkoutTemplateDraft value) {
+    templateLoadCompleters[index].complete(value);
+  }
 
   @override
   Future<RoutineDraft?> loadRoutine(int id) {
@@ -509,7 +754,18 @@ final class _RoutineDetailRepository implements TrainingRepository {
   }
 
   @override
-  Future<WorkoutTemplateDraft?> loadTemplate(int id) async => templates[id];
+  Future<WorkoutTemplateDraft?> loadTemplate(int id) {
+    final error = templateLoadError;
+    if (error != null) {
+      return Future.error(error);
+    }
+    if (delayTemplateLoad) {
+      final completer = Completer<WorkoutTemplateDraft?>();
+      templateLoadCompleters.add(completer);
+      return completer.future;
+    }
+    return Future.value(templates[id]);
+  }
 
   @override
   Future<int> saveTemplate(WorkoutTemplateDraft draft) async {
@@ -536,8 +792,12 @@ final class _RoutineDetailRepository implements TrainingRepository {
     }
     if (delayCopy) {
       _copyCompleter = Completer<int>();
-      return _copyCompleter!.future;
+      return _copyCompleter!.future.then((id) {
+        standaloneCopies.add(templates[templateId]!.deepCopy());
+        return id;
+      });
     }
+    standaloneCopies.add(templates[templateId]!.deepCopy());
     return Future.value(1000);
   }
 
