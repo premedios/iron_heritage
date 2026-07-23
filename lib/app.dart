@@ -1,14 +1,13 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'flavors.dart';
-
-
+import 'src/core/navigation/app_shell.dart';
 import 'src/core/theme/app_theme.dart';
 import 'src/features/sync/data/wger_repository.dart';
 import 'src/features/sync/presentation/sync_screen.dart';
-import 'src/features/dashboard/presentation/dashboard_screen.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'src/features/training/presentation/training_destination.dart';
 
 class App extends ConsumerWidget {
   const App({super.key});
@@ -24,17 +23,20 @@ class App extends ConsumerWidget {
         child: isSyncedAsync.when(
           data: (isSynced) {
             if (isSynced) {
-              return const DashboardScreen();
+              return const AppShell(
+                initialIndex: 1,
+                home: Center(child: Text('Home is not available yet')),
+                training: TrainingDestination(),
+                calendar: Center(child: Text('Calendar is not available yet')),
+              );
             } else {
               return const SyncScreen();
             }
           },
-          loading: () => const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
-          ),
-          error: (err, stack) => Scaffold(
-            body: Center(child: Text('Error: $err')),
-          ),
+          loading: () =>
+              const Scaffold(body: Center(child: CircularProgressIndicator())),
+          error: (err, stack) =>
+              Scaffold(body: Center(child: Text('Error: $err'))),
         ),
         show: kDebugMode,
       ),

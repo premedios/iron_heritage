@@ -1,20 +1,27 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:iron_heritage/app.dart';
 import 'package:iron_heritage/flavors.dart';
 import 'package:iron_heritage/src/features/sync/data/wger_repository.dart';
+import 'package:iron_heritage/src/features/training/presentation/training_providers.dart';
+
+import 'support/fake_training_repository.dart';
 
 void main() {
-  testWidgets('App renders the active flavor title', (
+  testWidgets('synced app starts on Training with incremental destinations', (
     WidgetTester tester,
   ) async {
     F.appFlavor = Flavor.dev;
+    final repository = FakeTrainingRepository();
+    addTearDown(repository.dispose);
 
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
           isSyncedProvider.overrideWith((ref) async => true),
+          trainingRepositoryProvider.overrideWithValue(repository),
         ],
         child: const App(),
       ),
@@ -22,6 +29,26 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    expect(find.text('IRON HERITAGE'), findsOneWidget);
+    final navigation = tester.widget<NavigationBar>(find.byType(NavigationBar));
+    expect(navigation.selectedIndex, 1);
+    expect(find.text('Training'), findsWidgets);
+
+    await tester.tap(
+      find.descendant(
+        of: find.byType(NavigationBar),
+        matching: find.text('Home'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Home is not available yet'), findsOneWidget);
+
+    await tester.tap(
+      find.descendant(
+        of: find.byType(NavigationBar),
+        matching: find.text('Calendar'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Calendar is not available yet'), findsOneWidget);
   });
 }
