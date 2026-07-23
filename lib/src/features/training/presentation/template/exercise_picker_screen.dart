@@ -32,6 +32,29 @@ final class _ExercisePickerScreenState
   @override
   Widget build(BuildContext context) {
     final catalog = ref.watch(exercisesProvider);
+    final catalogIds = catalog.hasValue
+        ? catalog.requireValue.map((exercise) => exercise.id).toSet()
+        : null;
+    final selectedIds = catalogIds == null
+        ? _selectedIds
+        : _selectedIds.where(catalogIds.contains).toList();
+    if (catalogIds != null && selectedIds.length != _selectedIds.length) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) {
+          return;
+        }
+        final currentCatalog = ref.read(exercisesProvider);
+        if (!currentCatalog.hasValue) {
+          return;
+        }
+        final currentIds = currentCatalog.requireValue
+            .map((exercise) => exercise.id)
+            .toSet();
+        setState(
+          () => _selectedIds.removeWhere((id) => !currentIds.contains(id)),
+        );
+      });
+    }
     return Scaffold(
       appBar: AppBar(title: const Text('Add exercises')),
       body: Column(
@@ -59,7 +82,7 @@ final class _ExercisePickerScreenState
       bottomNavigationBar: SafeArea(
         minimum: const EdgeInsets.all(16),
         child: FilledButton(
-          onPressed: _selectedIds.isEmpty || !catalog.hasValue
+          onPressed: selectedIds.isEmpty || !catalog.hasValue
               ? null
               : () {
                   final exercises = catalog.requireValue;
@@ -67,15 +90,15 @@ final class _ExercisePickerScreenState
                     for (final exercise in exercises) exercise.id: exercise,
                   };
                   final choices = [
-                    for (final id in _selectedIds)
+                    for (final id in selectedIds)
                       if (byId[id] case final exercise?)
                         ExerciseChoice(id: id, name: exercise.name),
                   ];
                   Navigator.pop(context, choices);
                 },
           child: Text(
-            'Add ${_selectedIds.length} '
-            '${_selectedIds.length == 1 ? 'exercise' : 'exercises'}',
+            'Add ${selectedIds.length} '
+            '${selectedIds.length == 1 ? 'exercise' : 'exercises'}',
           ),
         ),
       ),

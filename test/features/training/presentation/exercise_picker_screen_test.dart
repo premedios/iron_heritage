@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -159,4 +161,30 @@ void main() {
     expect(find.text('Add 1 exercise'), findsOneWidget);
     expect(find.text('Cable Fly'), findsNothing);
   });
+
+  testWidgets(
+    'catalog refresh removes missing selections from count and result',
+    (tester) async {
+      final catalog = StreamController<List<Exercise>>();
+      addTearDown(catalog.close);
+      List<ExerciseChoice>? result;
+      await pumpPicker(
+        tester,
+        selected: const {1, 2},
+        provider: (_) => catalog.stream,
+        onResult: (value) => result = value,
+      );
+      catalog.add(exercises);
+      await tester.pump();
+      expect(find.text('Add 2 exercises'), findsOneWidget);
+
+      catalog.add([exercises[0], exercises[2]]);
+      await tester.pump();
+      expect(find.text('Add 1 exercise'), findsOneWidget);
+
+      await tester.tap(find.text('Add 1 exercise'));
+      await tester.pumpAndSettle();
+      expect(result!.map((choice) => choice.id), [1]);
+    },
+  );
 }

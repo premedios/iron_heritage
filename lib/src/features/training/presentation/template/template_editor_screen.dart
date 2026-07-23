@@ -35,6 +35,8 @@ final class _TemplateEditorScreenState extends State<TemplateEditorScreen> {
   late final TextEditingController _nameController;
   final _nameFocusNode = FocusNode();
   final _setTokens = <int, List<Object>>{};
+  final _setTargetErrors = <Object, Map<_SetTarget, String>>{};
+  final _setTargetRaw = <Object, Map<_SetTarget, String>>{};
   bool _allowPop = false;
   String? _announcement;
 
@@ -63,9 +65,9 @@ final class _TemplateEditorScreenState extends State<TemplateEditorScreen> {
   Widget build(BuildContext context) {
     final draft = _controller.draft;
     return PopScope<Object?>(
-      canPop: _allowPop || !_controller.dirty,
+      canPop: !_controller.saving && (_allowPop || !_controller.dirty),
       onPopInvokedWithResult: (didPop, _) {
-        if (!didPop) {
+        if (!didPop && !_controller.saving) {
           _confirmDiscard();
         }
       },
@@ -102,12 +104,17 @@ final class _TemplateEditorScreenState extends State<TemplateEditorScreen> {
               TextFormField(
                 controller: _nameController,
                 focusNode: _nameFocusNode,
+                enabled: !_controller.saving,
                 decoration: InputDecoration(
                   labelText: 'Template name',
                   errorText: _controller.errors['name'],
                 ),
                 textInputAction: TextInputAction.next,
-                onChanged: _controller.setName,
+                onChanged: (value) {
+                  if (!_controller.saving) {
+                    _controller.setName(value);
+                  }
+                },
               ),
               const SizedBox(height: 16),
               if (_controller.errors['prescriptions'] case final error?)
@@ -129,32 +136,58 @@ final class _TemplateEditorScreenState extends State<TemplateEditorScreen> {
                     index: index,
                     prescription: prescription,
                     setTokens: _setTokens[prescription.exerciseId]!,
+                    targetErrors: _setTargetErrors,
+                    targetRaw: _setTargetRaw,
                     setError:
                         _controller.errors['prescriptions.$index.plannedSets'],
                     mutationsEnabled: !_controller.saving,
-                    onNotesChanged: (value) =>
-                        _controller.setNotes(index, value),
+                    onNotesChanged: (value) => _setNotes(index, value),
                     onRemove: () {
+                      if (_controller.saving) {
+                        return;
+                      }
+                      for (final token
+                          in _setTokens[prescription.exerciseId]!) {
+                        _setTargetErrors.remove(token);
+                        _setTargetRaw.remove(token);
+                      }
                       _controller.removeExercise(index);
                       _synchronizeTokens();
                     },
                     onAddSet: () {
+                      if (_controller.saving) {
+                        return;
+                      }
                       _controller.addPlannedSet(index);
                       _synchronizeTokens();
                     },
                     onRemoveSet: (setIndex) {
+                      if (_controller.saving) {
+                        return;
+                      }
+                      _setTargetErrors.remove(
+                        _setTokens[prescription.exerciseId]![setIndex],
+                      );
+                      _setTargetRaw.remove(
+                        _setTokens[prescription.exerciseId]![setIndex],
+                      );
                       _setTokens[prescription.exerciseId]!.removeAt(setIndex);
                       _controller.removePlannedSet(index, setIndex);
                       _synchronizeTokens();
                     },
-                    onUpdateSet: (setIndex, value) =>
-                        _controller.updatePlannedSet(index, setIndex, value),
+                    onUpdateSet: (setIndex, value) {
+                      if (!_controller.saving) {
+                        _controller.updatePlannedSet(index, setIndex, value);
+                      }
+                    },
+                    onSetValidityChanged: _setTargetValidity,
                     onReorderSets: (oldIndex, newIndex) =>
                         _reorderSets(index, oldIndex, newIndex),
                     exerciseHandle: AccessibleReorderHandle(
                       key: ValueKey('exercise-drag-${prescription.exerciseId}'),
                       index: index,
                       label: prescription.exerciseName,
+                      enabled: !_controller.saving,
                       onMoveUp: index == 0
                           ? null
                           : () => _reorderExercises(index, index - 1),
@@ -203,11 +236,17 @@ final class _TemplateEditorScreenState extends State<TemplateEditorScreen> {
   }
 
   void _reorderExercises(int oldIndex, int newIndex) {
+    if (_controller.saving) {
+      return;
+    }
     final controllerIndex = newIndex > oldIndex ? newIndex + 1 : newIndex;
     _controller.reorderExercises(oldIndex, controllerIndex);
   }
 
   void _reorderSets(int prescriptionIndex, int oldIndex, int newIndex) {
+    if (_controller.saving) {
+      return;
+    }
     final prescription = _controller.draft.prescriptions[prescriptionIndex];
     final tokens = _setTokens[prescription.exerciseId]!;
     if (newIndex != oldIndex) {
@@ -223,6 +262,9 @@ final class _TemplateEditorScreenState extends State<TemplateEditorScreen> {
   }
 
   Future<void> _addExercises() async {
+    if (_controller.saving) {
+      return;
+    }
     final existingIds = _controller.draft.prescriptions
         .map((prescription) => prescription.exerciseId)
         .toSet();
@@ -231,7 +273,7 @@ final class _TemplateEditorScreenState extends State<TemplateEditorScreen> {
         builder: (_) => ExercisePickerScreen(initiallySelectedIds: existingIds),
       ),
     );
-    if (!mounted || choices == null) {
+    if (!mounted || choices == null || _controller.saving) {
       return;
     }
     await _controller.addExercises(
@@ -242,6 +284,10 @@ final class _TemplateEditorScreenState extends State<TemplateEditorScreen> {
 
   Future<void> _save() async {
     setState(() => _announcement = null);
+    if (_setTargetErrors.isNotEmpty) {
+      setState(() => _announcement = 'Fix invalid Planned Set targets');
+      return;
+    }
     try {
       if (widget.onCompleted case final onCompleted?) {
         final completed = _controller.completeDraft();
@@ -301,6 +347,27 @@ final class _TemplateEditorScreenState extends State<TemplateEditorScreen> {
     setState(() => _allowPop = true);
     Navigator.pop(context);
   }
+
+  void _setNotes(int index, String value) {
+    if (!_controller.saving) {
+      _controller.setNotes(index, value);
+    }
+  }
+
+  void _setTargetValidity(
+    Object token,
+    Map<_SetTarget, String> errors,
+    Map<_SetTarget, String> raw,
+  ) {
+    setState(() {
+      _setTargetRaw[token] = Map.unmodifiable(raw);
+      if (errors.isEmpty) {
+        _setTargetErrors.remove(token);
+      } else {
+        _setTargetErrors[token] = Map.unmodifiable(errors);
+      }
+    });
+  }
 }
 
 final class _ExerciseEditor extends StatelessWidget {
@@ -308,6 +375,8 @@ final class _ExerciseEditor extends StatelessWidget {
     required this.index,
     required this.prescription,
     required this.setTokens,
+    required this.targetErrors,
+    required this.targetRaw,
     required this.setError,
     required this.mutationsEnabled,
     required this.onNotesChanged,
@@ -315,6 +384,7 @@ final class _ExerciseEditor extends StatelessWidget {
     required this.onAddSet,
     required this.onRemoveSet,
     required this.onUpdateSet,
+    required this.onSetValidityChanged,
     required this.onReorderSets,
     required this.exerciseHandle,
     super.key,
@@ -323,6 +393,8 @@ final class _ExerciseEditor extends StatelessWidget {
   final int index;
   final ExercisePrescriptionDraft prescription;
   final List<Object> setTokens;
+  final Map<Object, Map<_SetTarget, String>> targetErrors;
+  final Map<Object, Map<_SetTarget, String>> targetRaw;
   final String? setError;
   final bool mutationsEnabled;
   final ValueChanged<String> onNotesChanged;
@@ -330,6 +402,12 @@ final class _ExerciseEditor extends StatelessWidget {
   final VoidCallback onAddSet;
   final ValueChanged<int> onRemoveSet;
   final void Function(int index, PlannedSetDraft value) onUpdateSet;
+  final void Function(
+    Object token,
+    Map<_SetTarget, String> errors,
+    Map<_SetTarget, String> raw,
+  )
+  onSetValidityChanged;
   final ReorderCallback onReorderSets;
   final AccessibleReorderHandle exerciseHandle;
 
@@ -360,6 +438,7 @@ final class _ExerciseEditor extends StatelessWidget {
             ),
             TextFormField(
               initialValue: prescription.notes,
+              enabled: mutationsEnabled,
               decoration: const InputDecoration(labelText: 'Notes'),
               onChanged: mutationsEnabled ? onNotesChanged : null,
             ),
@@ -376,6 +455,9 @@ final class _ExerciseEditor extends StatelessWidget {
                 final value = prescription.plannedSets[setIndex];
                 return _PlannedSetEditor(
                   key: ValueKey(setTokens[setIndex]),
+                  token: setTokens[setIndex],
+                  targetErrors: targetErrors[setTokens[setIndex]] ?? const {},
+                  rawValues: targetRaw[setTokens[setIndex]] ?? const {},
                   exerciseId: prescription.exerciseId,
                   exerciseName: prescription.exerciseName,
                   index: setIndex,
@@ -385,6 +467,7 @@ final class _ExerciseEditor extends StatelessWidget {
                   onChanged: (updated) => onUpdateSet(setIndex, updated),
                   onRemove: () => onRemoveSet(setIndex),
                   onReorder: onReorderSets,
+                  onValidityChanged: onSetValidityChanged,
                 );
               },
             ),
@@ -406,6 +489,9 @@ final class _ExerciseEditor extends StatelessWidget {
 final class _PlannedSetEditor extends StatefulWidget {
   const _PlannedSetEditor({
     required this.exerciseId,
+    required this.token,
+    required this.targetErrors,
+    required this.rawValues,
     required this.exerciseName,
     required this.index,
     required this.total,
@@ -414,10 +500,14 @@ final class _PlannedSetEditor extends StatefulWidget {
     required this.onChanged,
     required this.onRemove,
     required this.onReorder,
+    required this.onValidityChanged,
     super.key,
   });
 
   final int exerciseId;
+  final Object token;
+  final Map<_SetTarget, String> targetErrors;
+  final Map<_SetTarget, String> rawValues;
   final String exerciseName;
   final int index;
   final int total;
@@ -426,6 +516,12 @@ final class _PlannedSetEditor extends StatefulWidget {
   final ValueChanged<PlannedSetDraft> onChanged;
   final VoidCallback onRemove;
   final ReorderCallback onReorder;
+  final void Function(
+    Object token,
+    Map<_SetTarget, String> errors,
+    Map<_SetTarget, String> raw,
+  )
+  onValidityChanged;
 
   @override
   State<_PlannedSetEditor> createState() => _PlannedSetEditorState();
@@ -436,14 +532,23 @@ final class _PlannedSetEditorState extends State<_PlannedSetEditor> {
   late final TextEditingController _minReps;
   late final TextEditingController _maxReps;
   late final TextEditingController _rir;
-
   @override
   void initState() {
     super.initState();
-    _weight = TextEditingController(text: _number(widget.value.weight));
-    _minReps = TextEditingController(text: _number(widget.value.minReps));
-    _maxReps = TextEditingController(text: _number(widget.value.maxReps));
-    _rir = TextEditingController(text: _number(widget.value.rir));
+    _weight = TextEditingController(
+      text: widget.rawValues[_SetTarget.weight] ?? _number(widget.value.weight),
+    );
+    _minReps = TextEditingController(
+      text:
+          widget.rawValues[_SetTarget.minReps] ?? _number(widget.value.minReps),
+    );
+    _maxReps = TextEditingController(
+      text:
+          widget.rawValues[_SetTarget.maxReps] ?? _number(widget.value.maxReps),
+    );
+    _rir = TextEditingController(
+      text: widget.rawValues[_SetTarget.rir] ?? _number(widget.value.rir),
+    );
   }
 
   @override
@@ -476,6 +581,7 @@ final class _PlannedSetEditorState extends State<_PlannedSetEditor> {
                 key: ValueKey('set-drag-${widget.exerciseId}-${widget.index}'),
                 index: widget.index,
                 label: 'set ${widget.index + 1}',
+                enabled: widget.enabled,
                 onMoveUp: widget.index == 0
                     ? null
                     : () => widget.onReorder(widget.index, widget.index - 1),
@@ -494,24 +600,28 @@ final class _PlannedSetEditorState extends State<_PlannedSetEditor> {
                 controller: _weight,
                 decimal: true,
                 enabled: widget.enabled,
+                errorText: widget.targetErrors[_SetTarget.weight],
                 onChanged: (_) => _emit(),
               ),
               _TargetField(
                 label: 'Min reps',
                 controller: _minReps,
                 enabled: widget.enabled,
+                errorText: widget.targetErrors[_SetTarget.minReps],
                 onChanged: (_) => _emit(),
               ),
               _TargetField(
                 label: 'Max reps',
                 controller: _maxReps,
                 enabled: widget.enabled,
+                errorText: widget.targetErrors[_SetTarget.maxReps],
                 onChanged: (_) => _emit(),
               ),
               _TargetField(
                 label: 'RIR',
                 controller: _rir,
                 enabled: widget.enabled,
+                errorText: widget.targetErrors[_SetTarget.rir],
                 onChanged: (_) => _emit(),
               ),
             ],
@@ -540,7 +650,24 @@ final class _PlannedSetEditorState extends State<_PlannedSetEditor> {
     );
   }
 
-  void _emit() => widget.onChanged(_draft(type: widget.value.type));
+  void _emit() {
+    if (!widget.enabled) {
+      return;
+    }
+    final errors = <_SetTarget, String>{
+      _SetTarget.weight: ?_numberError(_weight.text),
+      _SetTarget.minReps: ?_integerError(_minReps.text),
+      _SetTarget.maxReps: ?_integerError(_maxReps.text),
+      _SetTarget.rir: ?_integerError(_rir.text),
+    };
+    widget.onValidityChanged(widget.token, errors, {
+      _SetTarget.weight: _weight.text,
+      _SetTarget.minReps: _minReps.text,
+      _SetTarget.maxReps: _maxReps.text,
+      _SetTarget.rir: _rir.text,
+    });
+    widget.onChanged(_draft(type: widget.value.type));
+  }
 
   PlannedSetDraft _draft({required PlannedSetType type}) {
     return PlannedSetDraft(
@@ -558,13 +685,31 @@ final class _PlannedSetEditorState extends State<_PlannedSetEditor> {
       value.trim().isEmpty ? null : double.tryParse(value);
   static int? _nullableInt(String value) =>
       value.trim().isEmpty ? null : int.tryParse(value);
+  static String? _numberError(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) {
+      return null;
+    }
+    final parsed = double.tryParse(trimmed);
+    return parsed == null || !parsed.isFinite ? 'Enter a number' : null;
+  }
+
+  static String? _integerError(String value) {
+    final trimmed = value.trim();
+    return trimmed.isEmpty || int.tryParse(trimmed) != null
+        ? null
+        : 'Enter a whole number';
+  }
 }
+
+enum _SetTarget { weight, minReps, maxReps, rir }
 
 final class _TargetField extends StatelessWidget {
   const _TargetField({
     required this.label,
     required this.controller,
     required this.enabled,
+    required this.errorText,
     required this.onChanged,
     this.decimal = false,
   });
@@ -572,6 +717,7 @@ final class _TargetField extends StatelessWidget {
   final String label;
   final TextEditingController controller;
   final bool enabled;
+  final String? errorText;
   final ValueChanged<String> onChanged;
   final bool decimal;
 
@@ -582,7 +728,7 @@ final class _TargetField extends StatelessWidget {
       child: TextField(
         controller: controller,
         enabled: enabled,
-        decoration: InputDecoration(labelText: label),
+        decoration: InputDecoration(labelText: label, errorText: errorText),
         keyboardType: TextInputType.numberWithOptions(decimal: decimal),
         onChanged: onChanged,
       ),

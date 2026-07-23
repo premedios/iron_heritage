@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:iron_heritage/src/features/training/data/training_repository.dart';
 import 'package:iron_heritage/src/features/training/domain/training_models.dart';
 import 'package:iron_heritage/src/features/training/presentation/template/template_editor_screen.dart';
+import 'package:iron_heritage/src/features/training/presentation/widgets/accessible_reorder_handle.dart';
 
 import '../../../support/fake_training_repository.dart';
 
@@ -299,6 +302,184 @@ void main() {
     expect(savedId, 1000);
   });
 
+  testWidgets('back is blocked while a persisted save is in flight', (
+    tester,
+  ) async {
+    final repository = _DelayedSaveRepository();
+    addTearDown(repository.dispose);
+    int? savedId;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: FilledButton(
+              onPressed: () => Navigator.push<void>(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => TemplateEditorScreen.persisted(
+                    initial: draft(),
+                    repository: repository,
+                    onSaved: (id) => savedId = id,
+                  ),
+                ),
+              ),
+              child: const Text('Open editor'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('Open editor'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Template name'),
+      'Changed',
+    );
+    await tester.pump();
+
+    await tester.tap(find.text('Save'));
+    await tester.pump();
+    expect(find.bySemanticsLabel('Saving Template'), findsOneWidget);
+    await tester.tap(find.byTooltip('Back'));
+    await tester.pump();
+
+    expect(find.text('Edit Template'), findsNothing);
+    expect(find.text('New Template'), findsOneWidget);
+    expect(find.text('Discard changes?'), findsNothing);
+
+    repository.completeFirstSave(42);
+    await tester.pumpAndSettle();
+    expect(savedId, 42);
+  });
+
+  testWidgets(
+    'keyboard and stale semantic actions cannot mutate while saving',
+    (tester) async {
+      final repository = _DelayedSaveRepository();
+      addTearDown(repository.dispose);
+      await pumpEditor(
+        tester,
+        embedded: false,
+        repository: repository,
+        initial: draft(
+          prescriptions: [
+            ExercisePrescriptionDraft(
+              exerciseId: 7,
+              exerciseName: 'Bench Press',
+              plannedSets: const [PlannedSetDraft()],
+            ),
+            ExercisePrescriptionDraft(
+              exerciseId: 9,
+              exerciseName: 'Cable Fly',
+              plannedSets: const [PlannedSetDraft()],
+            ),
+          ],
+        ),
+      );
+      final name = find.widgetWithText(TextFormField, 'Template name');
+      await tester.tap(name);
+      await tester.showKeyboard(name);
+      final semantics = tester.widget<Semantics>(
+        find
+            .descendant(
+              of: find.byKey(const ValueKey('exercise-drag-7')),
+              matching: find.byType(Semantics),
+            )
+            .first,
+      );
+      final staleMoveAction = semantics
+          .properties
+          .customSemanticsActions!
+          .entries
+          .singleWhere((entry) => entry.key.label == 'Move Bench Press down')
+          .value;
+
+      await tester.tap(find.text('Save'));
+      await tester.pump();
+      tester.testTextInput.enterText('Mutated while saving');
+      staleMoveAction();
+      await tester.pump();
+
+      expect(tester.widget<TextFormField>(name).enabled, isFalse);
+      expect(tester.widget<TextFormField>(name).controller!.text, 'Upper');
+      expect(
+        tester
+            .widget<TextFormField>(
+              find.widgetWithText(TextFormField, 'Notes').first,
+            )
+            .enabled,
+        isFalse,
+      );
+      expect(
+        tester
+            .widget<AccessibleReorderHandle>(
+              find.byKey(
+                const ValueKey('exercise-drag-7'),
+                skipOffstage: false,
+              ),
+            )
+            .enabled,
+        isFalse,
+      );
+
+      repository.completeFirstSave(42);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+
+      expect(repository.savedDrafts, hasLength(2));
+      expect(repository.savedDrafts.last.name, 'Upper');
+      expect(
+        repository.savedDrafts.last.prescriptions.map(
+          (prescription) => prescription.exerciseName,
+        ),
+        ['Bench Press', 'Cable Fly'],
+      );
+    },
+  );
+
+  testWidgets('invalid load and reps stay visible and prevent persistence', (
+    tester,
+  ) async {
+    final fake = await pumpEditor(tester, embedded: false);
+
+    await tester.enterText(find.widgetWithText(TextField, 'Weight'), 'heavy');
+    await tester.enterText(find.widgetWithText(TextField, 'Min reps'), '8.5');
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    expect(
+      tester
+          .widget<TextField>(find.widgetWithText(TextField, 'Weight'))
+          .decoration!
+          .errorText,
+      'Enter a number',
+    );
+    expect(
+      tester
+          .widget<TextField>(find.widgetWithText(TextField, 'Min reps'))
+          .decoration!
+          .errorText,
+      'Enter a whole number',
+    );
+    expect(
+      tester
+          .widget<TextField>(find.widgetWithText(TextField, 'Weight'))
+          .controller!
+          .text,
+      'heavy',
+    );
+    expect(
+      tester
+          .widget<TextField>(find.widgetWithText(TextField, 'Min reps'))
+          .controller!
+          .text,
+      '8.5',
+    );
+    expect(fake.savedTemplates, isEmpty);
+  });
+
   testWidgets('reorder handle exposes named custom semantic actions', (
     tester,
   ) async {
@@ -332,4 +513,60 @@ void main() {
       const Size(48, 48),
     );
   });
+}
+
+final class _DelayedSaveRepository implements TrainingRepository {
+  final delegate = FakeTrainingRepository();
+  final firstSave = Completer<int>();
+  final savedDrafts = <WorkoutTemplateDraft>[];
+
+  void completeFirstSave(int id) => firstSave.complete(id);
+
+  Future<void> dispose() => delegate.dispose();
+
+  @override
+  Future<int> saveTemplate(WorkoutTemplateDraft draft) {
+    savedDrafts.add(draft);
+    return savedDrafts.length == 1
+        ? firstSave.future
+        : Future.value(draft.id ?? 43);
+  }
+
+  @override
+  Future<ExercisePrescriptionDraft?> latestPrescription(int exerciseId) =>
+      delegate.latestPrescription(exerciseId);
+
+  @override
+  Future<WorkoutTemplateDraft?> loadTemplate(int id) =>
+      delegate.loadTemplate(id);
+
+  @override
+  Future<RoutineDraft?> loadRoutine(int id) => delegate.loadRoutine(id);
+
+  @override
+  Future<int> saveRoutine(RoutineDraft draft) => delegate.saveRoutine(draft);
+
+  @override
+  Future<int> saveRoutineTemplateAsStandalone(int templateId) =>
+      delegate.saveRoutineTemplateAsStandalone(templateId);
+
+  @override
+  Future<void> setRoutineArchived(int id, {required bool archived}) =>
+      delegate.setRoutineArchived(id, archived: archived);
+
+  @override
+  Future<void> setTemplateArchived(int id, {required bool archived}) =>
+      delegate.setTemplateArchived(id, archived: archived);
+
+  @override
+  Stream<List<RoutineSummary>> watchRoutines({
+    required bool archived,
+    String query = '',
+  }) => delegate.watchRoutines(archived: archived, query: query);
+
+  @override
+  Stream<List<WorkoutTemplateSummary>> watchTemplates({
+    required bool archived,
+    String query = '',
+  }) => delegate.watchTemplates(archived: archived, query: query);
 }
