@@ -16,4 +16,29 @@ void main() {
     expect(await db.select(db.exercisePrescriptions).get(), isEmpty);
     expect(await db.select(db.plannedSets).get(), isEmpty);
   });
+
+  test(
+    'v2 upgrade preserves populated routines and creates Training tables',
+    () async {
+      await db.close();
+      db = createV2TestDatabase();
+
+      final routine = await db.select(db.routines).getSingle();
+
+      expect(routine.id, 7);
+      expect(routine.name, 'Legacy routine');
+      expect(
+        routine.createdAt,
+        DateTime.fromMillisecondsSinceEpoch(1704067200000),
+      );
+      expect(
+        routine.updatedAt,
+        DateTime.fromMillisecondsSinceEpoch(1704067200000),
+      );
+      expect(routine.archivedAt, isNull);
+      expect(await db.select(db.workoutTemplates).get(), isEmpty);
+      expect(await db.select(db.exercisePrescriptions).get(), isEmpty);
+      expect(await db.select(db.plannedSets).get(), isEmpty);
+    },
+  );
 }

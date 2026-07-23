@@ -34,8 +34,21 @@ class AppDatabase extends _$AppDatabase {
         await delete(exercises).go();
       }
       if (from < 3) {
-        await m.addColumn(routines, routines.updatedAt);
-        await m.addColumn(routines, routines.archivedAt);
+        await customStatement('''
+          CREATE TABLE routines_new (
+            id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            created_at INTEGER NOT NULL DEFAULT (CAST(strftime('%s', CURRENT_TIMESTAMP) AS INTEGER)),
+            updated_at INTEGER NOT NULL DEFAULT (CAST(strftime('%s', CURRENT_TIMESTAMP) AS INTEGER)),
+            archived_at INTEGER
+          )
+        ''');
+        await customStatement('''
+          INSERT INTO routines_new (id, name, created_at, updated_at, archived_at)
+          SELECT id, name, created_at, created_at, NULL FROM routines
+        ''');
+        await customStatement('DROP TABLE routines');
+        await customStatement('ALTER TABLE routines_new RENAME TO routines');
         await m.createTable(workoutTemplates);
         await m.createTable(exercisePrescriptions);
         await m.createTable(plannedSets);
