@@ -87,6 +87,78 @@ void main() {
     expect(find.text('Legs'), findsNothing);
   });
 
+  testWidgets(
+    'picker completion keeps selected order when catalog refreshes during load',
+    (tester) async {
+      final chest = _template(id: 11, name: 'Chest');
+      final legs = _template(id: 12, name: 'Legs');
+      final delegate = FakeTrainingRepository(
+        templates: [_summary(chest), _summary(legs)],
+      )..templateDraftsById.addAll({11: chest, 12: legs});
+      final repository = _DelayedTemplateLoadRepository(
+        delegate: delegate,
+        delayedId: 11,
+      );
+      addTearDown(repository.dispose);
+      await _pumpEditor(tester, repository: repository);
+
+      await tester.tap(find.text('Add template'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Chest'));
+      await tester.tap(find.text('Legs'));
+      await tester.pump();
+      await tester.tap(find.text('Add 2 templates'));
+      await tester.pump();
+
+      delegate.emitTemplates([_summary(chest)]);
+      await tester.pump();
+      await tester.pump();
+      repository.completeDelayed(chest);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Add Templates'), findsNothing);
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Routine name'),
+        'Upper Lower',
+      );
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+      expect(
+        delegate.savedRoutines.single.templates.map(
+          (template) => template.name,
+        ),
+        ['Chest', 'Legs'],
+      );
+    },
+  );
+
+  testWidgets('picker ignores duplicate completion while loads are busy', (
+    tester,
+  ) async {
+    final chest = _template(id: 11, name: 'Chest');
+    final delegate = FakeTrainingRepository(templates: [_summary(chest)])
+      ..templateDraftsById[11] = chest;
+    final repository = _DelayedTemplateLoadRepository(
+      delegate: delegate,
+      delayedId: 11,
+    );
+    addTearDown(repository.dispose);
+    await _pumpEditor(tester, repository: repository);
+
+    await tester.tap(find.text('Add template'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Chest'));
+    await tester.pump();
+    await tester.tap(find.text('Add 1 template'));
+    await tester.tap(find.text('Add 1 template'));
+
+    expect(repository.loadCalls, [11]);
+
+    repository.completeDelayed(chest);
+    await tester.pumpAndSettle();
+    expect(find.text('Add Templates'), findsNothing);
+  });
+
   testWidgets('Create new opens embedded Template editor without persistence', (
     tester,
   ) async {
@@ -423,6 +495,66 @@ final class _DelayedRoutineRepository implements TrainingRepository {
   @override
   Future<WorkoutTemplateDraft?> loadTemplate(int id) =>
       delegate.loadTemplate(id);
+
+  @override
+  Future<int> saveRoutineTemplateAsStandalone(int templateId) =>
+      delegate.saveRoutineTemplateAsStandalone(templateId);
+
+  @override
+  Future<int> saveTemplate(WorkoutTemplateDraft draft) =>
+      delegate.saveTemplate(draft);
+
+  @override
+  Future<void> setRoutineArchived(int id, {required bool archived}) =>
+      delegate.setRoutineArchived(id, archived: archived);
+
+  @override
+  Future<void> setTemplateArchived(int id, {required bool archived}) =>
+      delegate.setTemplateArchived(id, archived: archived);
+
+  @override
+  Stream<List<RoutineSummary>> watchRoutines({
+    required bool archived,
+    String query = '',
+  }) => delegate.watchRoutines(archived: archived, query: query);
+
+  @override
+  Stream<List<WorkoutTemplateSummary>> watchTemplates({
+    required bool archived,
+    String query = '',
+  }) => delegate.watchTemplates(archived: archived, query: query);
+}
+
+final class _DelayedTemplateLoadRepository implements TrainingRepository {
+  _DelayedTemplateLoadRepository({
+    required this.delegate,
+    required this.delayedId,
+  });
+
+  final FakeTrainingRepository delegate;
+  final int delayedId;
+  final _delayed = Completer<WorkoutTemplateDraft?>();
+  final loadCalls = <int>[];
+
+  void completeDelayed(WorkoutTemplateDraft? draft) => _delayed.complete(draft);
+
+  Future<void> dispose() => delegate.dispose();
+
+  @override
+  Future<WorkoutTemplateDraft?> loadTemplate(int id) {
+    loadCalls.add(id);
+    return id == delayedId ? _delayed.future : delegate.loadTemplate(id);
+  }
+
+  @override
+  Future<ExercisePrescriptionDraft?> latestPrescription(int exerciseId) =>
+      delegate.latestPrescription(exerciseId);
+
+  @override
+  Future<RoutineDraft?> loadRoutine(int id) => delegate.loadRoutine(id);
+
+  @override
+  Future<int> saveRoutine(RoutineDraft draft) => delegate.saveRoutine(draft);
 
   @override
   Future<int> saveRoutineTemplateAsStandalone(int templateId) =>

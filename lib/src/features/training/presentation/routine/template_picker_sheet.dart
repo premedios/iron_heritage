@@ -216,20 +216,25 @@ final class _TemplatePickerSheetState extends State<TemplatePickerSheet> {
   }
 
   Future<void> _complete() async {
+    if (_loading) {
+      return;
+    }
+    final selectedIds = List<int>.of(_selectedIds);
+    final created = List<WorkoutTemplateDraft>.of(_created);
     setState(() {
       _loading = true;
       _error = null;
     });
     try {
       final selected = <WorkoutTemplateDraft>[];
-      for (final id in _selectedIds) {
+      for (final id in selectedIds) {
         final template = await widget.repository.loadTemplate(id);
         if (template == null) {
           throw StateError('Selected Template is no longer available');
         }
         selected.add(template);
       }
-      selected.addAll(_created);
+      selected.addAll(created);
       if (mounted) {
         Navigator.pop(context, selected);
       }
