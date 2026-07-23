@@ -6,9 +6,14 @@ import 'widgets/training_list_cards.dart';
 import 'widgets/training_list_state.dart';
 
 class ArchivedTrainingScreen extends ConsumerWidget {
-  const ArchivedTrainingScreen({super.key, required this.contentType});
+  const ArchivedTrainingScreen({
+    super.key,
+    required this.contentType,
+    required this.onOpenTemplate,
+  });
 
   final TrainingContentType contentType;
+  final ValueChanged<int> onOpenTemplate;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -18,6 +23,7 @@ class ArchivedTrainingScreen extends ConsumerWidget {
       appBar: AppBar(title: Text(title)),
       body: templates
           ? _ArchivedTemplates(
+              onOpen: onOpenTemplate,
               onRestore: (id, name) => _confirmRestore(
                 context,
                 ref,
@@ -87,8 +93,9 @@ class ArchivedTrainingScreen extends ConsumerWidget {
 }
 
 class _ArchivedTemplates extends ConsumerWidget {
-  const _ArchivedTemplates({required this.onRestore});
+  const _ArchivedTemplates({required this.onOpen, required this.onRestore});
 
+  final ValueChanged<int> onOpen;
   final Future<void> Function(int id, String name) onRestore;
 
   @override
@@ -113,7 +120,7 @@ class _ArchivedTemplates extends ConsumerWidget {
             final item = items[index];
             return WorkoutTemplateCard(
               summary: item,
-              onTap: () => onRestore(item.id, item.name),
+              onTap: () => onOpen(item.id),
               trailing: IconButton(
                 tooltip: 'Restore Template',
                 onPressed: () => onRestore(item.id, item.name),

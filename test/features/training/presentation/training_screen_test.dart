@@ -329,9 +329,10 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [trainingRepositoryProvider.overrideWithValue(fake)],
-        child: const MaterialApp(
+        child: MaterialApp(
           home: ArchivedTrainingScreen(
             contentType: TrainingContentType.templates,
+            onOpenTemplate: (_) {},
           ),
         ),
       ),

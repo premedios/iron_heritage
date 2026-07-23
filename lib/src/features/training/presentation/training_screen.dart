@@ -122,8 +122,10 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen>
             onSelected: (contentType) {
               Navigator.of(context).push<void>(
                 MaterialPageRoute(
-                  builder: (_) =>
-                      ArchivedTrainingScreen(contentType: contentType),
+                  builder: (_) => ArchivedTrainingScreen(
+                    contentType: contentType,
+                    onOpenTemplate: widget.onOpenTemplate,
+                  ),
                 ),
               );
             },

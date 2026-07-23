@@ -214,6 +214,63 @@ void main() {
   );
 
   testWidgets(
+    'archived Template card opens detail while trailing action restores only',
+    (tester) async {
+      final repository = FakeTrainingRepository(
+        templates: [
+          WorkoutTemplateSummary(
+            id: 1,
+            name: 'Chest',
+            exerciseNames: const ['Bench Press'],
+            updatedAt: DateTime(2026, 1, 1),
+          ),
+        ],
+      );
+      repository.templateDraftsById[1] = WorkoutTemplateDraft(
+        id: 1,
+        name: 'Chest',
+        prescriptions: const [],
+        archivedAt: DateTime(2026, 1, 2),
+      );
+      await repository.setTemplateArchived(1, archived: true);
+      await pumpDestination(tester, repository);
+
+      await tester.tap(find.byTooltip('More Training actions'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Archived Templates'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Chest'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(TemplateDetailScreen), findsOneWidget);
+      expect(find.byTooltip('Edit Template'), findsOneWidget);
+      expect(find.byTooltip('More Template actions'), findsOneWidget);
+      expect(find.text('Start Workout'), findsNothing);
+
+      await tester.tap(find.byTooltip('More Template actions'));
+      await tester.pumpAndSettle();
+      expect(find.text('Restore'), findsOneWidget);
+      Navigator.of(tester.element(find.byType(TemplateDetailScreen))).pop();
+      await tester.pumpAndSettle();
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Restore Template'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(TemplateDetailScreen), findsNothing);
+      expect(repository.restoredTemplateIds, isEmpty);
+
+      await tester.tap(find.widgetWithText(FilledButton, 'Restore'));
+      await tester.pump();
+      await tester.pump();
+
+      expect(repository.restoredTemplateIds, [1]);
+      expect(find.byType(TemplateDetailScreen), findsNothing);
+      expect(find.text('Chest'), findsNothing);
+    },
+  );
+
+  testWidgets(
     'Training coordinator opens Routine flows and preserves back navigation',
     (tester) async {
       final repository = FakeTrainingRepository(
