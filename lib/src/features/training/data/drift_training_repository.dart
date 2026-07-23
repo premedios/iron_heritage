@@ -424,7 +424,17 @@ final class DriftTrainingRepository implements TrainingRepository {
     }
 
     return _db.transaction(() async {
-      await _assertRoutineNameAvailable(draft);
+      final persistedRoutine = draft.id == null
+          ? null
+          : await (_db.select(
+              _db.routines,
+            )..where((row) => row.id.equals(draft.id!))).getSingleOrNull();
+      if (draft.id != null && persistedRoutine == null) {
+        throw StateError('Routine not found');
+      }
+      if (persistedRoutine?.archivedAt == null) {
+        await _assertRoutineNameAvailable(draft);
+      }
       final timestamp = _now();
       final routineId = await _upsertRoutine(draft, timestamp);
       final existingIds = await _activeRoutineTemplateIds(routineId);

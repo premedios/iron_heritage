@@ -129,6 +129,32 @@ void main() {
         RoutineDraft(name: 'PUSH PULL', templates: [chestTemplate]),
       );
 
+      final archived = await repo.loadRoutine(originalId);
+      await repo.saveRoutine(
+        RoutineDraft(
+          id: originalId,
+          archivedAt: archived!.archivedAt,
+          name: ' push pull ',
+          templates: archived.templates,
+        ),
+      );
+      expect((await repo.loadRoutine(originalId))!.archivedAt, isNotNull);
+
+      final otherActiveId = await repo.saveRoutine(
+        RoutineDraft(name: 'Other', templates: [chestTemplate]),
+      );
+      await expectLater(
+        repo.saveRoutine(
+          RoutineDraft(
+            id: otherActiveId,
+            archivedAt: DateTime.utc(2020),
+            name: 'PUSH PULL',
+            templates: (await repo.loadRoutine(otherActiveId))!.templates,
+          ),
+        ),
+        throwsA(isA<DuplicateTrainingName>()),
+      );
+
       await expectLater(
         repo.setRoutineArchived(originalId, archived: false),
         throwsA(isA<DuplicateTrainingName>()),
